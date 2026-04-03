@@ -1,0 +1,73 @@
+# =========================
+# 🔐 ENV & Secrets (GLOBAL)
+# =========================
+.env
+.env.*
+*.env
+
+# =========================
+# 🟢 FRONTEND (React + Vite)
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# =========================
+# 🐍 BACKEND (Django)
+# =========================
+backend/__pycache__/
+backend/*.py[cod]
+backend/*.pyo
+backend/*.pyd
+
+# Virtual environments
+backend/venv/
+backend/env/
+backend/.venv/
+
+# Django DB
+backend/db.sqlite3
+backend/*.sqlite3
+
+# Static & media (generated files)
+backend/staticfiles/
+backend/media/
+
+# Migrations (optional)
+backend/**/migrations/*.py
+!backend/**/migrations/__init__.py
+
+# =========================
+# 📊 (Optional ML if used)
+# =========================
+*.pkl
+*.joblib
+*.h5
+*.pt
+data/
+datasets/
+
+# =========================
+# 🧪 Testing / Coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# 🧰 IDE / OS
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# 🚀 Misc
+# =========================
+*.log
+*.tmp
+*.bak
