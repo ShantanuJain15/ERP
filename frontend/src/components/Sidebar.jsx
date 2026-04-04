@@ -52,7 +52,7 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        <div className="sidebar-section-label" style={{ marginTop: 12 }}>Modules</div>
+        {/* <div className="sidebar-section-label" style={{ marginTop: 12 }}>Modules</div> */}
         <button
           className="nav-item"
           style={{ width: '100%', background: 'none', border: 'none', justifyContent: 'flex-start' }}
