@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   MdAdd, MdSearch, MdEdit, MdDelete
 } from 'react-icons/md'
@@ -31,7 +32,7 @@ export default function Customers() {
           <div className="page-title">Customers</div>
           <div className="page-subtitle">Manage your customer database</div>
         </div>
-        <button className="btn btn-primary"><MdAdd /> Add Customer</button>
+        <Link to="/customers/new" className="btn btn-primary"><MdAdd /> Add Customer</Link>
       </div>
 
       <div className="filter-bar">
@@ -75,9 +76,9 @@ export default function Customers() {
                 <td>{statusBadge(c.status)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-outline btn-sm btn-icon" title="Edit">
+                    <Link to={`/customers/${c.id}/edit`} className="btn btn-outline btn-sm btn-icon" title="Edit">
                       <MdEdit />
-                    </button>
+                    </Link>
                     <button className="btn btn-danger btn-sm btn-icon" title="Delete">
                       <MdDelete />
                     </button>
