@@ -8,6 +8,8 @@ import Categories from './pages/Categories'
 import Suppliers from './pages/Suppliers'
 import StockMovements from './pages/StockMovements'
 import Reports from './pages/Reports'
+import Customers from './pages/Customers'
+import Invoices from './pages/Invoices'
 
 const isLoggedIn = () => !!localStorage.getItem('access_token')
 
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="suppliers"        element={<Suppliers />} />
           <Route path="stock-movements"  element={<StockMovements />} />
           <Route path="reports"          element={<Reports />} />
+          <Route path="customers"        element={<Customers />} />
+          <Route path="invoices"         element={<Invoices />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
