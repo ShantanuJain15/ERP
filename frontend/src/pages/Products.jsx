@@ -6,20 +6,21 @@ import {
 } from 'react-icons/md'
 
 const MOCK_PRODUCTS = [
-  { id: 1, sku: 'PRD-001', name: 'Laptop Dell XPS 15',    category: 'Electronics', supplier: 'Dell Inc.',      qty: 45,  price: 1299.99, status: 'active' },
-  { id: 2, sku: 'PRD-002', name: 'Office Chair Pro',       category: 'Furniture',   supplier: 'Ergonomix Co.', qty: 12,  price: 349.00,  status: 'active' },
-  { id: 3, sku: 'PRD-003', name: 'USB-C Hub 7-Port',       category: 'Electronics', supplier: 'Anker Corp.',   qty: 150, price: 49.99,   status: 'active' },
-  { id: 4, sku: 'PRD-004', name: 'Wireless Mouse',         category: 'Electronics', supplier: 'Logitech.',     qty: 80,  price: 59.99,   status: 'active' },
-  { id: 5, sku: 'PRD-005', name: 'Standing Desk 140cm',    category: 'Furniture',   supplier: 'FlexiDesk.',    qty: 8,   price: 599.00,  status: 'low_stock' },
-  { id: 6, sku: 'PRD-006', name: 'Mechanical Keyboard',    category: 'Electronics', supplier: 'Keychron.',     qty: 30,  price: 149.00,  status: 'active' },
-  { id: 7, sku: 'PRD-007', name: 'Monitor 27" 4K',         category: 'Electronics', supplier: 'LG Display.',   qty: 0,   price: 699.00,  status: 'out_of_stock' },
-  { id: 8, sku: 'PRD-008', name: 'Noise Cancelling Buds',  category: 'Electronics', supplier: 'Sony Corp.',    qty: 55,  price: 279.00,  status: 'active' },
+  { id: 1, sku: 'PRD-001', name: 'Laptop Dell XPS 15', category: 'Electronics', supplier: 'Dell Inc.', qty: 45, price: 1299.99, status: 'active' },
+  { id: 2, sku: 'PRD-002', name: 'Office Chair Pro', category: 'Furniture', supplier: 'Ergonomix Co.', qty: 12, price: 349.00, status: 'active' },
+  { id: 3, sku: 'PRD-003', name: 'USB-C Hub 7-Port', category: 'Electronics', supplier: 'Anker Corp.', qty: 150, price: 49.99, status: 'active' },
+  { id: 4, sku: 'PRD-004', name: 'Wireless Mouse', category: 'Electronics', supplier: 'Logitech.', qty: 80, price: 59.99, status: 'active' },
+  { id: 5, sku: 'PRD-005', name: 'Standing Desk 140cm', category: 'Furniture', supplier: 'FlexiDesk.', qty: 8, price: 599.00, status: 'low_stock' },
+  { id: 6, sku: 'PRD-006', name: 'Mechanical Keyboard', category: 'Electronics', supplier: 'Keychron.', qty: 30, price: 149.00, status: 'active' },
+  { id: 7, sku: 'PRD-007', name: 'Monitor 27" 4K', category: 'Electronics', supplier: 'LG Display.', qty: 0, price: 699.00, status: 'out_of_stock' },
+  { id: 8, sku: 'PRD-008', name: 'Noise Cancelling Buds', category: 'Electronics', supplier: 'Sony Corp.', qty: 55, price: 279.00, status: 'active' },
+  { id: 9, sku: 'PRD-009', name: 'Noise Cancelling Buds', category: 'Electronics', supplier: 'Indus.', qty: 2, price: 280.00, status: 'active' },
 ]
 
 const statusBadge = (s) => {
-  if (s === 'active')        return <span className="badge badge-success">Active</span>
-  if (s === 'low_stock')     return <span className="badge badge-warning">Low Stock</span>
-  if (s === 'out_of_stock')  return <span className="badge badge-danger">Out of Stock</span>
+  if (s === 'active') return <span className="badge badge-success">Active</span>
+  if (s === 'low_stock') return <span className="badge badge-warning">Low Stock</span>
+  if (s === 'out_of_stock') return <span className="badge badge-danger">Out of Stock</span>
   return <span className="badge badge-neutral">{s}</span>
 }
 
@@ -42,7 +43,7 @@ export default function Products() {
     .filter(p =>
       (catFilter === 'All' || p.category === catFilter) &&
       (p.name.toLowerCase().includes(search.toLowerCase()) ||
-       p.sku.toLowerCase().includes(search.toLowerCase()))
+        p.sku.toLowerCase().includes(search.toLowerCase()))
     )
     .sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey]
