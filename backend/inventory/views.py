@@ -30,9 +30,9 @@ class StandardResultsSetPagination(LimitOffsetPagination) :
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by("-created_at") # it is a lazy queryset, it will not hit the database until it is evaluated
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated, IsAdminForCreateDelete] # 
-    pagination_class = StandardResultsSetPagination
-    authentication_classes = [JWTAuthentication] # it is simplejwt
+    # permission_classes = [IsAuthenticated, IsAdminForCreateDelete] # 
+    # pagination_class = StandardResultsSetPagination
+    # authentication_classes = [JWTAuthentication] # it is simplejwt
 
     def get_queryset(self):
         queryset = super().get_queryset()
