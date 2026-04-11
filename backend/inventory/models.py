@@ -314,7 +314,7 @@ class Invoice(models.Model):
 
     invoice_number = models.CharField(max_length=50, unique=True)
     date = models.DateTimeField(auto_now_add=True)
-
+    # invoice_items=
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -328,6 +328,11 @@ class Invoice(models.Model):
         default="PENDING"
     )
 
+    is_active      = models.BooleanField(default=True)
+    last_modified_by_username = models.CharField(max_length=150, blank=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.invoice_number
     
@@ -338,7 +343,7 @@ class Invoice(models.Model):
         
 
 class InvoiceItem(models.Model):
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items") # what is related_names: it is related to serializer
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
 
     quantity = models.PositiveIntegerField()
@@ -347,14 +352,9 @@ class InvoiceItem(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
+        if not self.pk:  # only when creating
+            self.product.quantity -= self.quantity
+            self.product.save()
+
         self.total = self.quantity * self.price
-        super().save(*args, **kwargs)
-
-    def save(self, *args, **kwargs):
-        self.total = self.quantity * self.price
-
-        # reduce stock
-        self.product.quantity -= self.quantity
-        self.product.save()
-
         super().save(*args, **kwargs)

@@ -3,3 +3,4 @@ azure-storage-blob
 openpyxl
 djangorestframework
 djangorestframework-simplejwt
+reportlab

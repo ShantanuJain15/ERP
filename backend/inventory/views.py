@@ -2,12 +2,19 @@
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
-from .models import  Product,Customer
-from .serializers import ProductSerializer, CustomerSerializer
+from .models import  Product,Customer,Invoice,InvoiceItem
+from .serializers import ProductSerializer, CustomerSerializer,InvoiceSerializer,InvoiceItemSerializer
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+
+from .services.invoice_pdf import generate_invoice_pdf
+import io
 
 class IsAdminForCreateDelete(BasePermission):
     def has_permission(self, request, view):
@@ -95,8 +102,46 @@ class CustomerViewSet(viewsets.ModelViewSet):
     
 
 
-class InvoiceItemViewSet() :
-    pass
-class InvoiceViewSet() :
-    pass
+class InvoiceViewSet(viewsets.ModelViewSet) :
+    queryset = Invoice.objects.all()#.order_by("-created_at")
+    serializer_class=InvoiceSerializer
+    def perform_create(self, serializer): # perform_create is then called by the create()
+
+        serializer.save(
+        last_modified_by_username=self.request.user.username
+        )
+
+    @action(detail=True, methods=["get"])
+    def download_pdf(self, request, pk=None):
+        invoice = self.get_object()
+
+           
+
+        buffer = io.BytesIO()
+        generate_invoice_pdf(buffer, invoice)
+
+        buffer.seek(0)
+
+        return HttpResponse(
+            buffer,
+            content_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="invoice_{invoice.id}.pdf"'
+            },
+        )
+
+    # @action(methods=["get"], url_path="invoicegenerate") :
+
+
     
+class InvoiceItemViewSet(viewsets.ModelViewSet) :
+    queryset = InvoiceItem.objects.all()#.order_by("-created_at")
+    serializer_class=InvoiceItemSerializer
+
+    # def perform_create(self, serializer): # perform_create is then called by the create()
+
+    #     serializer.save(
+    #     last_modified_by_username=self.request.user.username
+    #     )
+
+   
