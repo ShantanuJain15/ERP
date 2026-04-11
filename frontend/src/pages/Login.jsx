@@ -24,7 +24,7 @@ export default function Login() {
         navigate('/dashboard')
       } else {
         throw new Error('Invalid credentials')
-      }  
+      }
     } catch {
       setError('Invalid username or password. Please try again.')
     } finally {
