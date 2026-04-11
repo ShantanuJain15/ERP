@@ -71,3 +71,6 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+
+
+**/__pycache__/
