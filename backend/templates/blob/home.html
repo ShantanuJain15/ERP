@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home</title>
+</head>
+<body>
+
+    <h1>Home Page</h1>
+
+    <!-- Upload -->
+    <form method="post" action="{% url 'blob:upload' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="file">
+        <button type="submit">Upload</button>
+    </form>
+<ul id="upload-messages">
+    {% for message in messages %}
+        {% if "upload" in message.tags %}
+            <li class="message {{ message.tags }}">{{ message }}</li>
+        {% endif %}
+    {% endfor %}
+</ul>
+<br>
+    
+
+<br>
+    <!-- Get List -->
+    <form method="get" action="{% url 'blob:list_blobs' %}">
+        <button type="submit">Get List</button>
+    </form>
+<br>
+
+<!-- Paginated List of Files --> 
+    <h3>Your Files</h3>
+
+<ul>
+    {% for blob in page_obj %}
+    <div>
+        {{ blob.file_name }}
+        <a href="{% url 'blob:download_blob' blob.id %}">
+                <button type="button">Download</button>
+            </a>
+    </div>
+    <br>
+    {% empty %}
+        <li>No files found.</li>
+    {% endfor %}
+</ul>
+
+<div class="pagination">
+    {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+</div>
+
+<br>
+
+
+
+<!-- Download -->
+<input type="number" id="downloadId" placeholder="Enter ID" required>
+<button onclick="downloadFile()">Download</button>
+
+<script>
+function downloadFile() {
+    const id = document.getElementById("downloadId").value;
+    if (id) {
+        window.location.href = `/blob/download/${id}/`;
+    }
+}
+</script>
+<ul id="download-messages">
+    {% for message in messages %}
+        {% if "download" in message.tags %}
+            <li class="message {{ message.tags }}">{{ message }}</li>
+        {% endif %}
+    {% endfor %}
+</ul>
+<br><br>
+
+    <!-- Logout -->
+    <h2>Log Out</h2>
+    <form method="post" action="{% url 'accounts:logout' %}">
+        {% csrf_token %}
+        <button type="submit">Logout</button>
+    </form>
+
+</body>
+</html>
