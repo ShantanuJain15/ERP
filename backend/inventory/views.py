@@ -11,7 +11,6 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 from django.http import HttpResponse
-from reportlab.pdfgen import canvas
 
 from .services.invoice_pdf import generate_invoice_pdf
 import io
