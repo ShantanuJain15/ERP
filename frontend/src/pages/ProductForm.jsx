@@ -3,6 +3,27 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { MdSave, MdArrowBack } from 'react-icons/md'
 import { createProduct, updateProduct, getProduct, getSuppliers } from '../api/inventory'
 
+// ── Field must live OUTSIDE the parent component so React doesn't
+// recreate it on every render (which would unmount/remount the input
+// and lose focus after every keystroke).
+function Field({ label, value, onChange, error, type = 'text', required, placeholder, step }) {
+  return (
+    <div className="form-group">
+      <label>{label}{required && <span style={{ color: 'var(--danger)' }}>*</span>}</label>
+      <input
+        className="input"
+        type={type}
+        step={step}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder || `Enter ${label.toLowerCase()}`}
+        style={error ? { borderColor: 'var(--danger)' } : {}}
+      />
+      {error && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{error}</span>}
+    </div>
+  )
+}
+
 const PRODUCT_TYPES = [
   { value: 'GENERIC', label: 'Generic' },
   { value: 'AC',      label: 'Air Conditioner' },
@@ -126,22 +147,14 @@ export default function ProductForm() {
     }
   }
 
-  // ── Field helper ──────────────────────────────────────────────────────────
-  const Field = ({ label, name, type = 'text', required, placeholder, step }) => (
-    <div className="form-group">
-      <label>{label}{required && <span style={{ color: 'var(--danger)' }}>*</span>}</label>
-      <input
-        className="input"
-        type={type}
-        step={step}
-        value={form[name]}
-        onChange={e => set(name, e.target.value)}
-        placeholder={placeholder || `Enter ${label.toLowerCase()}`}
-        style={errors[name] ? { borderColor: 'var(--danger)' } : {}}
-      />
-      {errors[name] && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{errors[name]}</span>}
-    </div>
-  )
+  // ── Field helper (defined outside — see top of file) ────────────────────
+  // Helper to bind a field by name to form state
+  const field = (name, overrides = {}) => ({
+    value:    form[name],
+    onChange: e => set(name, e.target.value),
+    error:    errors[name],
+    ...overrides,
+  })
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
@@ -223,11 +236,11 @@ export default function ProductForm() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
 
                 <div style={{ gridColumn: '1/-1' }}>
-                  <Field label="Product Name" name="name" required />
+                  <Field label="Product Name" required {...field('name')} />
                 </div>
 
-                <Field label="SKU / Barcode" name="sku" placeholder="Auto-generated if blank" />
-                <Field label="Brand" name="brand" placeholder="e.g. Samsung" />
+                <Field label="SKU / Barcode" placeholder="Auto-generated if blank" {...field('sku')} />
+                <Field label="Brand" placeholder="e.g. Samsung" {...field('brand')} />
 
                 {/* Type */}
                 <div className="form-group">
@@ -273,7 +286,7 @@ export default function ProductForm() {
             <div className="card">
               <div className="card-title" style={{ marginBottom: 20 }}>Pricing</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
-                <Field label="Selling Price ($)" name="price" type="number" step="0.01" required />
+                <Field label="Selling Price ($)" type="number" step="0.01" required {...field('price')} />
               </div>
             </div>
           </div>
@@ -285,8 +298,8 @@ export default function ProductForm() {
             <div className="card">
               <div className="card-title" style={{ marginBottom: 20 }}>Stock</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <Field label="Quantity" name="quantity" type="number" placeholder="0" />
-                <Field label="Reorder Level" name="reorder_level" type="number" placeholder="0" />
+                <Field label="Quantity" type="number" placeholder="0" {...field('quantity')} />
+                <Field label="Reorder Level" type="number" placeholder="0" {...field('reorder_level')} />
               </div>
             </div>
 
