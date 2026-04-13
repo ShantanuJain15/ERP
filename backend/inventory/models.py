@@ -68,6 +68,7 @@
 
 
 
+from reportlab.lib.colors import black
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -297,9 +298,9 @@ class SOLineItem(models.Model):
 
 class Customer(models.Model):
     name = models.CharField(max_length=255)
-    phone = models.CharField(max_length=20)
-    email = models.EmailField(blank=True)
-    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=20,null=True,unique=True)
+    email = models.EmailField(unique=True,null=True)
+    address = models.TextField(null=True,blank=True)
 
     is_active      = models.BooleanField(default=True)
     last_modified_by_username = models.CharField(max_length=150, blank=True)
@@ -312,7 +313,7 @@ class Customer(models.Model):
 class Invoice(models.Model):
 
     invoice_number = models.CharField(max_length=50, unique=True)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
     date = models.DateTimeField(auto_now_add=True)
     # invoice_items=
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
