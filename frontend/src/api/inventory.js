@@ -30,3 +30,12 @@ export const createStockMovement = (data)  => api.post('/inventory/stock-movemen
 
 // Dashboard
 export const getDashboardStats = () => api.get('/inventory/dashboard/stats/')
+
+
+//Customers
+export const getCustomers   = ()      => api.get('/inventory/customers/')
+export const getCustomer    = (id)    => api.get(`/inventory/customers/${id}/`)
+export const createCustomer = (data)  => api.post('/inventory/customers/', data)
+export const updateCustomer = (id, d) => api.put(`/inventory/customers/${id}/`, d)
+export const deleteCustomer = (id)    => api.delete(`/inventory/customers/${id}/`)
+

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList
 } from 'react-icons/md'
+// import { getInvoices } from '../api/inventory'
 
 export default function Invoices() {
   const [search, setSearch] = useState('')
