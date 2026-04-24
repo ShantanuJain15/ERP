@@ -2,3 +2,6 @@ db.sqlite3
 note.md
 venv
 **/__pycache__/
+
+__pycache__/
+*.pyc
