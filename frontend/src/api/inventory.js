@@ -39,3 +39,18 @@ export const createCustomer = (data)  => api.post('/inventory/customers/', data)
 export const updateCustomer = (id, d) => api.put(`/inventory/customers/${id}/`, d)
 export const deleteCustomer = (id)    => api.delete(`/inventory/customers/${id}/`)
 
+// Invoices
+export const getInvoices      = (params) => api.get('/inventory/invoices/', { params })
+export const getInvoice       = (id)     => api.get(`/inventory/invoices/${id}/`)
+export const createInvoice    = (data)   => api.post('/inventory/invoices/', data)
+export const updateInvoice    = (id, d)  => api.put(`/inventory/invoices/${id}/`, d)
+export const patchInvoice     = (id, d)  => api.patch(`/inventory/invoices/${id}/`, d)
+export const deleteInvoice    = (id)     => api.delete(`/inventory/invoices/${id}/`)
+export const downloadInvoicePdf = (id)  => api.get(`/inventory/invoices/${id}/download_pdf/`, { responseType: 'blob' })
+export const sendInvoiceEmail   = (id, email) => api.post(`/inventory/invoices/${id}/send_email_pdf/`, { email })
+
+// Invoice Items
+export const getInvoiceItems    = (params) => api.get('/inventory/invoicesitem/', { params })
+export const createInvoiceItem  = (data)   => api.post('/inventory/invoicesitem/', data)
+export const updateInvoiceItem  = (id, d)  => api.put(`/inventory/invoicesitem/${id}/`, d)
+export const deleteInvoiceItem  = (id)     => api.delete(`/inventory/invoicesitem/${id}/`)
