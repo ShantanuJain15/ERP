@@ -14,6 +14,7 @@ from django.http import HttpResponse
 
 from .services.invoice_pdf import generate_invoice_pdf
 import io
+from .services.invoice_email import send_invoice_email
 
 class IsAdminForCreateDelete(BasePermission):
     def has_permission(self, request, view):
@@ -129,7 +130,21 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
             },
         )
 
-    # @action(methods=["get"], url_path="invoicegenerate") :
+    @action(methods=["post"], detail=True)
+    def send_email_pdf(self, request, pk=None):
+        invoice = self.get_object()
+        recepient_email = request.data.get("email")
+        recepient_email=recepient_email.strip()
+        try:
+            send_invoice_email(invoice, recepient_email)
+            return Response("Email sent successfully", status=200)
+        except ValueError as ve:
+            return Response(str(ve), status=400)
+        except Exception as e:
+            return Response(str(e), status=500) 
+        
+
+
 
 
     
