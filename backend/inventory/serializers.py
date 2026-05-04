@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import  Product, Customer,Invoice,InvoiceItem
+from .models import  Product, Customer,Invoice,InvoiceItem,ACProduct
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -44,6 +44,37 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
         # so we mark it read_only to skip DRF's required-field validation.
         # 'total' is computed on save so it's also read_only.
         read_only_fields = ["invoice", "total"]
+
+    # def create(self, validated_data):
+    #     invoice_item = super().create(validated_data)
+
+    #     self.handle_product_logic(invoice_item)
+
+    #     return invoice_item
+
+    # def update(self, instance, validated_data):
+    #     instance = super().update(instance, validated_data)
+
+    #     self.handle_product_logic(instance)
+
+    #     return instance
+
+    # def handle_product_logic(self, invoice_item):
+    #     product = invoice_item.product
+
+    #     # assuming product has a field like: type = "electronic"
+    #     if product.type == "AC":
+    #         # get related electronic record
+    #         ac = ACProduct.objects.filter(product=product).first()
+
+    #         if electronic:
+    #             # example update (customize this)
+    #             electronic.stock -= invoice_item.quantity
+    #             electronic.save()
+        
+        
+
+
 
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)

@@ -22,3 +22,12 @@ simple Jwt(api/token) for token generation, now add the expiry date and refresh_
 # inventory
 token auth,( run the codex, which made some changes thats why have to run "python manage.py migrate" and only simple token is working now have to implement jwt also codex has changes to settings.py in default auth)
 pagination()
+
+
+
+APi Documentation
+
+AI agent on Inventory ofr updates and queries
+
+
+concurrent invoicing
