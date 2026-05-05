@@ -2,8 +2,8 @@
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
-from .models import  Product,Customer,Invoice,InvoiceItem
-from .serializers import ProductSerializer, CustomerSerializer,InvoiceSerializer,InvoiceItemSerializer
+from .models import  Product,Supplier,Customer,Invoice,InvoiceItem
+from .serializers import ProductSerializer, SupplierSerializer, CustomerSerializer,InvoiceSerializer,InvoiceItemSerializer
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -81,6 +81,11 @@ class ProductViewSet(viewsets.ModelViewSet):
 #     authentication_classes = [JWTAuthentication]
 
 
+class SupplierViewSet(viewsets.ModelViewSet):
+
+    queryset = Supplier.objects.all()
+    serializer_class=SupplierSerializer
+    # permission_classes = [IsAuthenticated]
 
 
 class CustomerViewSet(viewsets.ModelViewSet):

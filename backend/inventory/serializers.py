@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from .models import  Product, Customer,Invoice,InvoiceItem,ACProduct
+from .models import  Product, Customer,Invoice,InvoiceItem,ACProduct, Supplier
+
+
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -28,6 +30,11 @@ class ProductSerializer(serializers.ModelSerializer):
 #         model = AC
 #         fields = "__all__"
 
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = '__all__'
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
