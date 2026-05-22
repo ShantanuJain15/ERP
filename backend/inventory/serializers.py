@@ -111,6 +111,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
         invoice.update_total()
         self._sync_status(invoice)
+        invoice.save()
         return invoice
 
     # ── UPDATE (PATCH / PUT) with full dirty-checking ────────────────────────

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList,
   MdRefresh, MdPictureAsPdf, MdEmail
@@ -143,9 +144,9 @@ export default function Invoices() {
           <button className="btn btn-outline btn-sm" onClick={fetchInvoices} title="Refresh">
             <MdRefresh />
           </button>
-          <button className="btn btn-primary">
+          <Link to="/invoices/new" className="btn btn-primary">
             <MdAdd /> Create Invoice
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -242,12 +243,13 @@ export default function Invoices() {
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button
+                    <Link
+                      to={`/invoices/${inv.id}/edit`}
                       className="btn btn-outline btn-sm btn-icon"
                       title="Edit"
                     >
                       <MdEdit />
-                    </button>
+                    </Link>
                     <button
                       className="btn btn-outline btn-sm btn-icon"
                       title="Download PDF"
