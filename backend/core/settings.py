@@ -165,3 +165,11 @@ DEFAULT_FROM_EMAIL  = EMAIL_HOST_USER
 # ─── Company branding (used in invoice emails) ─────────────────────────────────
 COMPANY_NAME  = "Your Company Name"   # ← replace
 COMPANY_PHONE = "+91 98765 43210"     # ← replace
+
+
+# ─── Pine Labs (Plural) API ─────────────────────────────────────────────────
+import os
+
+PINELABS_BASE_URL      = os.environ.get("PINELABS_BASE_URL", "https://pluraluat.v2.pinepg.in")
+PINELABS_CLIENT_ID     = os.environ.get("PINELABS_CLIENT_ID", "1b41f425-11e0-4643-8f46-8496272bwd9e7")
+PINELABS_CLIENT_SECRET = os.environ.get("PINELABS_CLIENT_SECRET", "0dfdaf7ea27442bf9afaaf13d10d6f7f5")

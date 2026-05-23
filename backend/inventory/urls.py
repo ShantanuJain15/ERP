@@ -1,8 +1,9 @@
+# pyrefly: ignore [missing-import]
 from django.urls import include, path
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
 
-from .views import ProductViewSet, CustomerViewSet,InvoiceViewSet,InvoiceItemViewSet
+from .views import ProductViewSet, CustomerViewSet,InvoiceViewSet,InvoiceItemViewSet, OfferDiscoveryView, BrandOfferDiscoveryView
 
 app_name = "inventory"
 
@@ -15,7 +16,7 @@ router.register("invoicesitem", InvoiceItemViewSet, basename="invoiceitem")
 
 urlpatterns = [
     path("token/", obtain_auth_token, name="token_auth"), # this is obselete as I have remove TokenAuthentication from the default authentication classes in settings.py, and I am using JWTAuthentication instead,
+    path("offers/discover/", OfferDiscoveryView.as_view(), name="offer-discover"),
+    path("offers/discover-brand/", BrandOfferDiscoveryView.as_view(), name="offer-discover-brand"),
     path("", include(router.urls)),
 ]
-
-

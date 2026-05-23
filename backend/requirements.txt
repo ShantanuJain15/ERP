@@ -4,3 +4,4 @@ openpyxl
 djangorestframework
 djangorestframework-simplejwt
 reportlab
+requests
