@@ -15,6 +15,9 @@ from django.http import HttpResponse
 from .services.invoice_pdf import generate_invoice_pdf
 import io
 from .services.invoice_email import send_invoice_email
+from rest_framework.views import APIView
+from rest_framework import status as drf_status
+from .services.pinelabs import PineLabsClient, PineLabsAPIError
 
 class IsAdminForCreateDelete(BasePermission):
     def has_permission(self, request, view):
@@ -158,4 +161,176 @@ class InvoiceItemViewSet(viewsets.ModelViewSet) :
     #     last_modified_by_username=self.request.user.username
     #     )
 
-   
+
+class OfferDiscoveryView(APIView):
+    """
+    POST /api/inventory/offers/discover/
+
+    Proxies to Pine Labs Offer Discovery API and returns EMI / offer details.
+
+    Expected JSON body:
+    {
+        "order_amount": 1200000,       // amount in smallest currency unit (paise)
+        "currency": "INR",             // optional, defaults to INR
+        "bin": "60100000",             // issuer BIN (first 6-8 digits)
+        "card_number": "4000...",      // full or masked card number
+        "customer_id": "cust-..."      // unique customer identifier
+    }
+    """
+
+    def post(self, request):
+        data = request.data
+
+        # ── validate required field ──────────────────────────────────────
+        order_amount = data.get("order_amount")
+        if order_amount is None:
+            return Response(
+                {"error": "order_amount is required (in smallest currency unit, e.g. paise)."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            order_amount = int(order_amount)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "order_amount must be an integer."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── call Pine Labs ───────────────────────────────────────────────
+        try:
+            client = PineLabsClient()
+            result = client.discover_offers(
+                order_amount_value=order_amount,
+                currency=data.get("currency", "INR"),
+                bin=data.get("bin", ""),
+                card_number=data.get("card_number", ""),
+                customer_id=data.get("customer_id", ""),
+            )
+            return Response(result, status=drf_status.HTTP_200_OK)
+
+        except ValueError as exc:
+            # Missing credentials in settings
+            return Response(
+                {"error": str(exc)},
+                status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except PineLabsAPIError as exc:
+            return Response(
+                {"error": "Pine Labs API error", "detail": exc.detail},
+                status=exc.status_code,
+            )
+        except Exception as exc:
+            return Response(
+                {"error": f"Unexpected error: {exc}"},
+                status=drf_status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class BrandOfferDiscoveryView(APIView):
+    """
+    POST /api/inventory/offers/discover-brand/
+
+    Proxies to Pine Labs Offer Discovery API for **Brand EMI** offers.
+    Unlike bank EMI, this requires product_details (per-product amounts
+    and coupon discounts). The response structure also differs.
+
+    Expected JSON body:
+    {
+        "order_amount": 1200000,
+        "currency": "INR",
+        "product_details": [
+            {
+                "product_code": "xyz",
+                "product_amount": {"currency": "INR", "value": 1200000},
+                "product_coupon_discount_amount": {"currency": "INR", "value": 0}
+            }
+        ],
+        "cart_coupon_discount": 0,
+        "bin": "60100000",
+        "card_number": "4000000000000000",
+        "customer_id": "cust-..."
+    }
+    """
+
+    def post(self, request):
+        data = request.data
+
+        # ── validate required fields ─────────────────────────────────────
+        order_amount = data.get("order_amount")
+        if order_amount is None:
+            return Response(
+                {"error": "order_amount is required (in smallest currency unit, e.g. paise)."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            order_amount = int(order_amount)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "order_amount must be an integer."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        product_details = data.get("product_details")
+        if not product_details or not isinstance(product_details, list):
+            return Response(
+                {"error": "product_details is required and must be a non-empty list."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate each product entry
+        for idx, product in enumerate(product_details):
+            if not product.get("product_code"):
+                return Response(
+                    {"error": f"product_details[{idx}].product_code is required."},
+                    status=drf_status.HTTP_400_BAD_REQUEST,
+                )
+            if not product.get("product_amount"):
+                return Response(
+                    {"error": f"product_details[{idx}].product_amount is required."},
+                    status=drf_status.HTTP_400_BAD_REQUEST,
+                )
+
+        # ── call Pine Labs ───────────────────────────────────────────────
+        try:
+            client = PineLabsClient()
+            currency = data.get("currency", "INR")
+
+            # Build product_details payload in the Pine Labs format
+            formatted_products = []
+            for product in product_details:
+                entry = {
+                    "product_code": product["product_code"],
+                    "product_amount": product["product_amount"],
+                }
+                if "product_coupon_discount_amount" in product:
+                    entry["product_coupon_discount_amount"] = product["product_coupon_discount_amount"]
+                formatted_products.append(entry)
+
+            result = client.discover_brand_offers(
+                order_amount_value=order_amount,
+                product_details=formatted_products,
+                currency=currency,
+                cart_coupon_discount_value=data.get("cart_coupon_discount"),
+                bin=data.get("bin", ""),
+                card_number=data.get("card_number", ""),
+                customer_id=data.get("customer_id", ""),
+            )
+            return Response(result, status=drf_status.HTTP_200_OK)
+
+        except ValueError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except PineLabsAPIError as exc:
+            return Response(
+                {"error": "Pine Labs API error", "detail": exc.detail},
+                status=exc.status_code,
+            )
+        except Exception as exc:
+            return Response(
+                {"error": f"Unexpected error: {exc}"},
+                status=drf_status.HTTP_502_BAD_GATEWAY,
+            )
