@@ -29,6 +29,31 @@ const PRODUCT_TYPES = [
   { value: 'AC',      label: 'Air Conditioner' },
 ]
 
+const ENERGY_LABELS = [
+  { value: '',      label: '— Select —' },
+  { value: 'A+++',  label: 'A+++' },
+  { value: 'A++',   label: 'A++' },
+  { value: 'A+',    label: 'A+' },
+  { value: 'A',     label: 'A' },
+  { value: 'B',     label: 'B' },
+  { value: 'C',     label: 'C' },
+]
+
+const REFRIGERANTS = [
+  { value: '',      label: '— Select —' },
+  { value: 'R32',   label: 'R32' },
+  { value: 'R410A', label: 'R410A' },
+  { value: 'R22',   label: 'R22' },
+  { value: 'R290',  label: 'R290 (Propane)' },
+]
+
+const EMPTY_AC = {
+  tonnage: '',
+  star_rating: '3',
+  energy_label: '',
+  refrigerant_type: '',
+}
+
 const EMPTY_FORM = {
   name: '',
   sku: '',
@@ -40,6 +65,7 @@ const EMPTY_FORM = {
   quantity: '',
   reorder_level: '',
   is_active: true,
+  ac_details: { ...EMPTY_AC },
 }
 
 export default function ProductForm() {
@@ -71,6 +97,7 @@ export default function ProductForm() {
     getProduct(id)
       .then(res => {
         const p = res.data
+        const ac = p.ac_details ?? {}
         setForm({
           name:          p.name          ?? '',
           sku:           p.sku           ?? '',
@@ -82,11 +109,20 @@ export default function ProductForm() {
           quantity:      p.quantity      ?? '',
           reorder_level: p.reorder_level ?? '',
           is_active:     p.is_active     ?? true,
+          ac_details: {
+            tonnage:          ac.tonnage          ?? '',
+            star_rating:      ac.star_rating      ?? '3',
+            energy_label:     ac.energy_label     ?? '',
+            refrigerant_type: ac.refrigerant_type ?? '',
+          },
         })
       })
       .catch(() => setApiError('Failed to load product details.'))
       .finally(() => setLoading(false))
   }, [id, isEdit])
+
+  // ── AC sub-form helpers ────────────────────────────────────────────────────
+  const setAc = (k, v) => setForm(p => ({ ...p, ac_details: { ...p.ac_details, [k]: v } }))
 
   // ── Validation ────────────────────────────────────────────────────────────
   const validate = () => {
@@ -97,6 +133,13 @@ export default function ProductForm() {
       e.price = 'Enter a valid price'
     if (form.quantity !== '' && isNaN(Number(form.quantity)))
       e.quantity = 'Quantity must be a number'
+    // AC-specific validation
+    if (form.type === 'AC') {
+      const ac = form.ac_details
+      if (!ac.tonnage) e.ac_tonnage = 'Tonnage is required for AC products'
+      else if (isNaN(Number(ac.tonnage)) || Number(ac.tonnage) <= 0)
+        e.ac_tonnage = 'Enter a valid tonnage'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -119,6 +162,19 @@ export default function ProductForm() {
       quantity:      form.quantity !== '' ? Number(form.quantity) : 0,
       reorder_level: form.reorder_level !== '' ? Number(form.reorder_level) : 0,
       is_active:     form.is_active,
+    }
+
+    // Include AC details when type is AC
+    if (form.type === 'AC') {
+      const ac = form.ac_details
+      payload.ac_details = {
+        tonnage:          Number(ac.tonnage),
+        star_rating:      Number(ac.star_rating) || 3,
+        energy_label:     ac.energy_label  || '',
+        refrigerant_type: ac.refrigerant_type || '',
+      }
+    } else {
+      payload.ac_details = null
     }
 
     try {
@@ -281,6 +337,101 @@ export default function ProductForm() {
                 </div>
               </div>
             </div>
+
+            {/* AC Details — shown only when type is AC */}
+            {form.type === 'AC' && (
+              <div className="card" style={{ animation: 'slideUp 0.25s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                  <span style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 32, height: 32, borderRadius: 8,
+                    background: 'rgba(56, 189, 248, 0.12)', fontSize: 16,
+                  }}>❄️</span>
+                  <div>
+                    <div className="card-title" style={{ marginBottom: 0 }}>AC Specifications</div>
+                    <div className="card-sub">Additional details for Air Conditioner products</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+
+                  {/* Tonnage */}
+                  <div className="form-group">
+                    <label>Tonnage (TR) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      className="input"
+                      type="number"
+                      step="0.1"
+                      min="0.5"
+                      max="10"
+                      value={form.ac_details.tonnage}
+                      onChange={e => setAc('tonnage', e.target.value)}
+                      placeholder="e.g. 1.5"
+                      style={errors.ac_tonnage ? { borderColor: 'var(--danger)' } : {}}
+                    />
+                    {errors.ac_tonnage && (
+                      <span style={{ fontSize: 12, color: 'var(--danger)' }}>{errors.ac_tonnage}</span>
+                    )}
+                  </div>
+
+                  {/* Star Rating */}
+                  <div className="form-group">
+                    <label>
+                      Star Rating (BEE)
+                      <span style={{
+                        marginLeft: 8, fontSize: 13, color: 'var(--warning)',
+                      }}>
+                        {'★'.repeat(Number(form.ac_details.star_rating) || 0)}
+                        {'☆'.repeat(5 - (Number(form.ac_details.star_rating) || 0))}
+                      </span>
+                    </label>
+                    <input
+                      className="input"
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={form.ac_details.star_rating}
+                      onChange={e => setAc('star_rating', e.target.value)}
+                      style={{
+                        padding: '6px 0',
+                        accentColor: 'var(--accent)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+                      <span>1 Star</span><span>5 Stars</span>
+                    </div>
+                  </div>
+
+                  {/* Energy Label */}
+                  <div className="form-group">
+                    <label>Energy Label</label>
+                    <select
+                      className="select"
+                      value={form.ac_details.energy_label}
+                      onChange={e => setAc('energy_label', e.target.value)}
+                    >
+                      {ENERGY_LABELS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Refrigerant Type */}
+                  <div className="form-group">
+                    <label>Refrigerant Type</label>
+                    <select
+                      className="select"
+                      value={form.ac_details.refrigerant_type}
+                      onChange={e => setAc('refrigerant_type', e.target.value)}
+                    >
+                      {REFRIGERANTS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Pricing */}
             <div className="card">

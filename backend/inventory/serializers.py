@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import  Product, Customer,Invoice,InvoiceItem
+from .models import  Product, ACProduct, Customer,Invoice,InvoiceItem
+
+
+class ACProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ACProduct
+        fields = ["tonnage", "star_rating", "energy_label", "refrigerant_type"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -8,9 +14,12 @@ class ProductSerializer(serializers.ModelSerializer):
     last_modified_by_username= serializers.ReadOnlyField() # Since this field is addded by perform_create, it will not be passed by the client, so it is read only fiel
     updated_at = serializers.ReadOnlyField()
     created_at = serializers.ReadOnlyField()
+    ac_details = ACProductSerializer(required=False, allow_null=True)
+
     class Meta:
         model = Product
         fields = "__all__"
+
     def get_fields(self):
         fields = super().get_fields()
         request = self.context.get("request")
@@ -21,6 +30,38 @@ class ProductSerializer(serializers.ModelSerializer):
             fields.pop("updated_at", None)
             fields.pop("created_at", None)
         return fields
+
+    def create(self, validated_data):
+        ac_data = validated_data.pop("ac_details", None)
+        product = Product.objects.create(**validated_data)
+
+        if product.type == "AC" and ac_data:
+            ACProduct.objects.create(product=product, **ac_data)
+
+        return product
+
+    def update(self, instance, validated_data):
+        ac_data = validated_data.pop("ac_details", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Handle AC details
+        if instance.type == "AC" and ac_data:
+            ac_obj, created = ACProduct.objects.get_or_create(
+                product=instance,
+                defaults=ac_data,
+            )
+            if not created:
+                for attr, value in ac_data.items():
+                    setattr(ac_obj, attr, value)
+                ac_obj.save()
+        elif instance.type != "AC":
+            # If type changed away from AC, remove the ac details
+            ACProduct.objects.filter(product=instance).delete()
+
+        return instance
 
 
 # class ACSerializer(serializers.ModelSerializer):
@@ -70,6 +111,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
         invoice.update_total()
         self._sync_status(invoice)
+        invoice.save()
         return invoice
 
     # ── UPDATE (PATCH / PUT) with full dirty-checking ────────────────────────

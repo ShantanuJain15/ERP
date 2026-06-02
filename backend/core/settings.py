@@ -147,3 +147,29 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True
     # "BLACKLIST_AFTER_ROTATION": True, # for this I have add an app in installed apps, "'rest_framework_simplejwt.token_blacklist'"
  }
+
+
+# ─── Email configuration ───────────────────────────────────────────────────────
+# Change these values to match your SMTP provider.
+# For local development you can use the console backend:
+#   EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+EMAIL_BACKEND   = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST      = "smtp.gmail.com"
+EMAIL_PORT      = 587
+EMAIL_USE_TLS   = True
+EMAIL_HOST_USER     = "shantanujain1507@gmail.com"   # ← replace
+EMAIL_HOST_PASSWORD = "xijv srde doek lvfv"       # ← replace (use an App Password for Gmail)
+DEFAULT_FROM_EMAIL  = EMAIL_HOST_USER
+
+# ─── Company branding (used in invoice emails) ─────────────────────────────────
+COMPANY_NAME  = "Your Company Name"   # ← replace
+COMPANY_PHONE = "+91 98765 43210"     # ← replace
+
+
+# ─── Pine Labs (Plural) API ─────────────────────────────────────────────────
+import os
+
+PINELABS_BASE_URL      = os.environ.get("PINELABS_BASE_URL", "https://pluraluat.v2.pinepg.in")
+PINELABS_CLIENT_ID     = os.environ.get("PINELABS_CLIENT_ID", "1b41f425-11e0-4643-8f46-8496272bwd9e7")
+PINELABS_CLIENT_SECRET = os.environ.get("PINELABS_CLIENT_SECRET", "0dfdaf7ea27442bf9afaaf13d10d6f7f5")

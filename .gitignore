@@ -19,6 +19,7 @@ frontend/yarn-error.log*
 # 🐍 BACKEND (Django)
 # =========================
 backend/__pycache__/
+backend/inventory/__pycache__/
 backend/*.py[cod]
 backend/*.pyo
 backend/*.pyd
