@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 
 from .models import  Product, ACProduct, Customer,Invoice,InvoiceItem
@@ -89,14 +91,48 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
     last_modified_by_username = serializers.ReadOnlyField()
+    invoice_number = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Invoice
         fields = "__all__"
         read_only_fields = ["total_amount"]
 
+    # ── INVOICE NUMBER VALIDATION & AUTO-GENERATION ──────────────────────────
+    _INVOICE_RE = re.compile(r"^PFE00\d{3}$")
+
+    def validate_invoice_number(self, value):
+        """If provided, must match PFE00XXX (e.g. PFE00001)."""
+        if value and not self._INVOICE_RE.match(value):
+            raise serializers.ValidationError(
+                "Invoice number must follow the format PFE00XXX "
+                "(e.g. PFE00001). 'PFE00' prefix + exactly 3 digits."
+            )
+        return value
+    
+    @staticmethod
+    def _next_invoice_number():
+        """Return the next sequential invoice number like PFE00001."""
+        last = (
+            Invoice.objects
+            .filter(invoice_number__regex=r"^PFE00\d{3}$")
+            .order_by("-invoice_number")
+            .values_list("invoice_number", flat=True)
+            .first()
+        )
+        next_seq = int(last[-3:]) + 1 if last else 1
+        if next_seq > 999:
+            raise serializers.ValidationError(
+                "Invoice number sequence exhausted (PFE00999 reached)."
+            )
+        return f"PFE00{next_seq:03d}"
+
     # ── CREATE ────────────────────────────────────────────────────────────────
     def create(self, validated_data):
+        # Auto-assign next invoice number if not provided
+        if not validated_data.get("invoice_number"):
+            validated_data["invoice_number"] = self._next_invoice_number()
+
         items_data = validated_data.pop("items", [])
 
         if not items_data:
