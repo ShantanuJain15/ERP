@@ -145,6 +145,8 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
             return Response(str(ve), status=400)
         except Exception as e:
             return Response(str(e), status=500) 
+    
+    
         
 
 
