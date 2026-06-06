@@ -540,7 +540,9 @@ export default function InvoiceForm() {
                     }}
                   >
                     <option value="">— Select —</option>
-                    {products.map(p => (
+                    {products
+                      .filter(p => p.is_active && p.quantity > 0)
+                      .map(p => (
                       <option key={p.id} value={p.id}>
                         {p.name} {p.sku ? `(${p.sku})` : ''}
                       </option>
