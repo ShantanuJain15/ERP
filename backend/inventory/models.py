@@ -349,6 +349,7 @@ class InvoiceItem(models.Model):
 
     quantity = models.PositiveIntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True, default="", help_text="Optional line item description")
 
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
