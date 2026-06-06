@@ -3,7 +3,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { MdSave, MdArrowBack, MdAdd, MdDelete } from 'react-icons/md'
 import {
   createInvoice, updateInvoice, getInvoice,
-  getCustomers, getProducts
+  getCustomers, getProducts, getNextInvoiceNumber,
+  createCustomer
 } from '../api/inventory'
 
 // ── Reusable Field (stable identity) ──────────────────────────────────────────
@@ -52,10 +53,15 @@ export default function InvoiceForm() {
   const [loading, setLoading]     = useState(isEdit)
   const [success, setSuccess]     = useState(false)
   const [apiError, setApiError]   = useState(null)
+  const [suggestedNumber, setSuggestedNumber] = useState('')
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [newCustomer, setNewCustomer]         = useState({ name: '', phone: '', email: '' })
+  const [addingCustomer, setAddingCustomer]   = useState(false)
+  const [custError, setCustError]             = useState(null)
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // ── Load dropdowns ──────────────────────────────────────────────────────────
+  // ── Load dropdowns & next invoice number ────────────────────────────────────
   useEffect(() => {
     getCustomers()
       .then(res => setCustomers(Array.isArray(res.data) ? res.data : res.data.results ?? []))
@@ -63,7 +69,20 @@ export default function InvoiceForm() {
     getProducts()
       .then(res => setProducts(Array.isArray(res.data) ? res.data : res.data.results ?? []))
       .catch(() => {})
-  }, [])
+
+    // Pre-fill next invoice number for new invoices
+    if (!isEdit) {
+      getNextInvoiceNumber()
+        .then(res => {
+          const next = res.data?.next_invoice_number
+          if (next) {
+            set('invoice_number', next)
+            setSuggestedNumber(next)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [isEdit])
 
   // ── Load invoice for edit ───────────────────────────────────────────────────
   useEffect(() => {
@@ -131,7 +150,11 @@ export default function InvoiceForm() {
   // ── Validation ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e = {}
-    if (!form.invoice_number.trim()) e.invoice_number = 'Invoice number is required'
+    if (!form.invoice_number.trim()) {
+      e.invoice_number = 'Invoice number is required'
+    } else if (!/^PFE00\d{3}$/.test(form.invoice_number.trim())) {
+      e.invoice_number = 'Must follow format PFE00XXX (e.g. PFE00001)'
+    }
     if (!form.customer) e.customer = 'Please select a customer'
 
     // Validate at least one valid item
@@ -283,30 +306,172 @@ export default function InvoiceForm() {
                   <input
                     className="input"
                     value={form.invoice_number}
-                    onChange={e => set('invoice_number', e.target.value)}
-                    placeholder="e.g. INV-001"
+                    onChange={e => set('invoice_number', e.target.value.toUpperCase())}
+                    placeholder="e.g. PFE00001"
+                    maxLength={8}
                     style={errors.invoice_number ? { borderColor: 'var(--danger)' } : {}}
+                    disabled={isEdit}
                   />
-                  {errors.invoice_number && (
+                  {errors.invoice_number ? (
                     <span style={{ fontSize: 12, color: 'var(--danger)' }}>{errors.invoice_number}</span>
+                  ) : !isEdit && suggestedNumber && form.invoice_number.trim() && form.invoice_number.trim() !== suggestedNumber ? (() => {
+                    const entered = parseInt(form.invoice_number.trim().slice(5), 10)
+                    const expected = parseInt(suggestedNumber.slice(5), 10)
+                    const gap = entered - expected
+                    return (
+                      <span style={{
+                        fontSize: 12, color: '#f59e0b', marginTop: 2, display: 'flex',
+                        flexDirection: 'column', gap: 2,
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          ⚠️ Next in sequence is <strong>{suggestedNumber}</strong>.
+                          <button
+                            type="button"
+                            onClick={() => set('invoice_number', suggestedNumber)}
+                            style={{
+                              background: 'none', border: 'none', color: '#f59e0b',
+                              textDecoration: 'underline', cursor: 'pointer', fontSize: 12,
+                              padding: 0,
+                            }}
+                          >
+                            Use it
+                          </button>
+                        </span>
+                        {gap > 0 && (
+                          <span style={{ fontSize: 11, color: 'var(--danger)' }}>
+                            ⛔ Skipping {gap} invoice number{gap> 0 ? 's' : ''} in the sequence
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })() : (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                      Format: PFE00XXX (auto-assigned)
+                    </span>
                   )}
                 </div>
 
                 <div className="form-group">
-                  <label>Customer <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <select
-                    className="select"
-                    value={form.customer}
-                    onChange={e => set('customer', e.target.value)}
-                    style={errors.customer ? { borderColor: 'var(--danger)' } : {}}
-                  >
-                    <option value="">— Select customer —</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  {errors.customer && (
-                    <span style={{ fontSize: 12, color: 'var(--danger)' }}>{errors.customer}</span>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Customer <span style={{ color: 'var(--danger)' }}>*</span></span>
+                    {!showAddCustomer && (
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddCustomer(true); setCustError(null) }}
+                        style={{
+                          background: 'none', border: 'none', color: 'var(--accent-light)',
+                          cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                          display: 'flex', alignItems: 'center', gap: 2, padding: 0,
+                        }}
+                      >
+                        <MdAdd size={14} /> New
+                      </button>
+                    )}
+                  </label>
+
+                  {!showAddCustomer ? (
+                    <>
+                      <select
+                        className="select"
+                        value={form.customer}
+                        onChange={e => set('customer', e.target.value)}
+                        style={errors.customer ? { borderColor: 'var(--danger)' } : {}}
+                      >
+                        <option value="">— Select customer —</option>
+                        {customers.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ''}</option>
+                        ))}
+                      </select>
+                      {errors.customer && (
+                        <span style={{ fontSize: 12, color: 'var(--danger)' }}>{errors.customer}</span>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{
+                      border: '1px solid var(--border)', borderRadius: 10,
+                      padding: 14, display: 'flex', flexDirection: 'column', gap: 10,
+                      background: 'var(--card-bg)', animation: 'slideUp 0.15s ease',
+                    }}>
+                      <input
+                        className="input" placeholder="Customer name *"
+                        value={newCustomer.name}
+                        onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))}
+                        autoFocus
+                      />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <input
+                          className="input" placeholder="Phone" type="tel"
+                          value={newCustomer.phone}
+                          onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))}
+                        />
+                        <input
+                          className="input" placeholder="Email" type="email"
+                          value={newCustomer.email}
+                          onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))}
+                        />
+                      </div>
+                      {custError && (
+                        <span style={{ fontSize: 12, color: 'var(--danger)' }}>{custError}</span>
+                      )}
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Link
+                          to="/customers/new"
+                          target="_blank"
+                          style={{
+                            fontSize: 12, color: 'var(--accent-light)',
+                            textDecoration: 'none', display: 'flex',
+                            alignItems: 'center', gap: 3,
+                          }}
+                        >
+                          Full form →
+                        </Link>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => {
+                              setShowAddCustomer(false)
+                              setNewCustomer({ name: '', phone: '', email: '' })
+                              setCustError(null)
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={addingCustomer || !newCustomer.name.trim()}
+                            onClick={async () => {
+                              setAddingCustomer(true)
+                              setCustError(null)
+                              try {
+                                const payload = { name: newCustomer.name.trim() }
+                                if (newCustomer.phone.trim()) payload.phone = newCustomer.phone.trim()
+                                if (newCustomer.email.trim()) payload.email = newCustomer.email.trim()
+                                const res = await createCustomer(payload)
+                                const created = res.data
+                                setCustomers(prev => [...prev, created])
+                                set('customer', String(created.id))
+                                setShowAddCustomer(false)
+                                setNewCustomer({ name: '', phone: '', email: '' })
+                              } catch (err) {
+                                const d = err.response?.data
+                                if (d && typeof d === 'object') {
+                                  const msg = Object.values(d).flat().join(', ')
+                                  setCustError(msg)
+                                } else {
+                                  setCustError('Failed to create customer')
+                                }
+                              } finally {
+                                setAddingCustomer(false)
+                              }
+                            }}
+                          >
+                            {addingCustomer ? 'Saving…' : <><MdAdd size={14} /> Add</>}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -375,7 +540,9 @@ export default function InvoiceForm() {
                     }}
                   >
                     <option value="">— Select —</option>
-                    {products.map(p => (
+                    {products
+                      .filter(p => p.is_active && p.quantity > 0)
+                      .map(p => (
                       <option key={p.id} value={p.id}>
                         {p.name} {p.sku ? `(${p.sku})` : ''}
                       </option>

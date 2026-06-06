@@ -114,6 +114,15 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
         last_modified_by_username=self.request.user.username
         )
 
+    @action(detail=False, methods=["get"], url_path="next-number")
+    def next_number(self, request):
+        """Return the next auto-generated invoice number."""
+        try:
+            number = InvoiceSerializer._next_invoice_number()
+            return Response({"next_invoice_number": number})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
     @action(detail=True, methods=["get"])
     def download_pdf(self, request, pk=None):
         invoice = self.get_object()
