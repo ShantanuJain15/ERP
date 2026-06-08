@@ -31,7 +31,7 @@ function Field({ label, value, onChange, error, type = 'text', required, placeho
 const fmtCurrency = (n) =>
   Number(n || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 })
 
-const EMPTY_ITEM = { product: '', quantity: '1', price: '' }
+const EMPTY_ITEM = { product: '', quantity: '1', price: '', description: '' }
 
 const EMPTY_FORM = {
   invoice_number: '',
@@ -98,9 +98,10 @@ export default function InvoiceForm() {
           paid_amount:    inv.paid_amount    ?? '0',
           items: (inv.items && inv.items.length > 0)
             ? inv.items.map(it => ({
-                product:  it.product  ?? '',
-                quantity: String(it.quantity ?? 1),
-                price:    String(it.price ?? ''),
+                product:     it.product  ?? '',
+                quantity:    String(it.quantity ?? 1),
+                price:       String(it.price ?? ''),
+                description: it.description ?? '',
               }))
             : [{ ...EMPTY_ITEM }],
         })
@@ -189,15 +190,17 @@ export default function InvoiceForm() {
     const validItems = form.items
       .filter(it => it.product && Number(it.quantity) > 0)
       .map(it => ({
-        product:  Number(it.product),
-        quantity: Number(it.quantity),
-        price:    Number(it.price),
+        product:     Number(it.product),
+        quantity:    Number(it.quantity),
+        price:       Number(it.price),
+        description: it.description?.trim() || '',
       }))
 
     const payload = {
       invoice_number: form.invoice_number.trim(),
       customer:       Number(form.customer),
       paid_amount:    Number(form.paid_amount) || 0,
+      status:         'PENDING',
       items:          validItems,
     }
 
@@ -235,9 +238,10 @@ export default function InvoiceForm() {
     const validItems = form.items
       .filter(it => it.product && Number(it.quantity) > 0)
       .map(it => ({
-        product:  Number(it.product),
-        quantity: Number(it.quantity),
-        price:    Number(it.price) || 0,
+        product:     Number(it.product),
+        quantity:    Number(it.quantity),
+        price:       Number(it.price) || 0,
+        description: it.description?.trim() || '',
       }))
 
     const payload = {
@@ -650,6 +654,17 @@ export default function InvoiceForm() {
                   >
                     <MdDelete />
                   </button>
+
+                  {/* Description — spans full row */}
+                  <div style={{ gridColumn: '1 / -1', paddingBottom: 4 }}>
+                    <input
+                      className="input"
+                      value={item.description || ''}
+                      onChange={e => setItem(idx, 'description', e.target.value)}
+                      placeholder="Item description / notes (optional)"
+                      style={{ fontSize: 12, padding: '6px 10px' }}
+                    />
+                  </div>
                 </div>
               ))}
 

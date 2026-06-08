@@ -91,12 +91,18 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
     last_modified_by_username = serializers.ReadOnlyField()
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     invoice_number = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Invoice
         fields = "__all__"
         read_only_fields = ["total_amount"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.pop("customer", None)  # hide raw FK id; customer_name is returned instead
+        return data
 
     # ── INVOICE NUMBER VALIDATION & AUTO-GENERATION ──────────────────────────
     _INVOICE_RE = re.compile(r"^PFE00\d{3}$")

@@ -23,7 +23,8 @@ const fmtAmount = (n) =>
 const STATUS_BADGE = {
   PAID:    'badge-success',
   PARTIAL: 'badge-warning',
-  PENDING: 'badge-neutral',
+  PENDING: 'badge-danger',
+  DRAFT: 'badge-neutral',
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export default function Invoices() {
     const q = search.toLowerCase()
     const matchSearch =
       inv.invoice_number?.toLowerCase().includes(q) ||
-      String(inv.customer).toLowerCase().includes(q)
+      String(inv.customer_name).toLowerCase().includes(q)
     return matchStatus && matchSearch
   })
 
@@ -129,6 +130,7 @@ export default function Invoices() {
   const paid    = invoices.filter(i => i.status === 'PAID').length
   const partial = invoices.filter(i => i.status === 'PARTIAL').length
   const pending = invoices.filter(i => i.status === 'PENDING').length
+  const draft   = invoices.filter(i => i.status === 'DRAFT').length
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -176,7 +178,7 @@ export default function Invoices() {
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <MdFilterList style={{ color: 'var(--text-muted)', alignSelf: 'center' }} />
-          {['ALL', 'PENDING', 'PARTIAL', 'PAID'].map(s => (
+          {['ALL', 'PENDING', 'PARTIAL', 'PAID','DRAFT'].map(s => (
             <button
               key={s}
               className={`btn btn-sm ${statusFilter === s ? 'btn-primary' : 'btn-outline'}`}
@@ -194,6 +196,7 @@ export default function Invoices() {
         <div className="info-pill">Paid: <strong style={{ color: 'var(--success)' }}>{paid}</strong></div>
         <div className="info-pill">Partial: <strong style={{ color: 'var(--warning)' }}>{partial}</strong></div>
         <div className="info-pill">Pending: <strong style={{ color: 'var(--text-muted)' }}>{pending}</strong></div>
+        <div className="info-pill">Draft: <strong style={{ color: 'var(--text-muted)' }}>{draft}</strong></div>
       </div>
 
       {/* Table */}
