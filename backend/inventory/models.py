@@ -325,8 +325,9 @@ class Invoice(models.Model):
             ("PENDING", "Pending"),
             ("PAID", "Paid"),
             ("PARTIAL", "Partial"),
+            ("DRAFT", "Draft"),
         ],
-        default="PENDING"
+        default="DRAFT"
     )
 
     is_active      = models.BooleanField(default=True)
@@ -354,7 +355,7 @@ class InvoiceItem(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
-        if not self.pk:  # only when creating
+        if not self.pk and self.invoice.status != "DRAFT":  # only deduct stock for non-draft invoices
             self.product.quantity -= self.quantity
             self.product.save()
 

@@ -133,9 +133,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if not validated_data.get("invoice_number"):
             validated_data["invoice_number"] = self._next_invoice_number()
 
+        is_draft = validated_data.get("status") == "DRAFT"
         items_data = validated_data.pop("items", [])
 
-        if not items_data:
+        if not items_data and not is_draft:
             raise serializers.ValidationError({
                 "items": "Invoice must have at least one item"
             })
@@ -270,7 +271,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
     # ── HELPER ────────────────────────────────────────────────────────────────
     @staticmethod
     def _sync_status(invoice):
-        """Set status automatically based on paid_amount vs total_amount."""
+        """Set status automatically based on paid_amount vs total_amount.
+        Preserves DRAFT status — only auto-syncs non-draft invoices."""
+        if invoice.status == "DRAFT":
+            return
         paid  = invoice.paid_amount  or 0
         total = invoice.total_amount or 0
         if total > 0 and paid >= total:

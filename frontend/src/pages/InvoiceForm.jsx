@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { MdSave, MdArrowBack, MdAdd, MdDelete } from 'react-icons/md'
+import { MdSave, MdArrowBack, MdAdd, MdDelete, MdDrafts } from 'react-icons/md'
 import {
   createInvoice, updateInvoice, getInvoice,
   getCustomers, getProducts, getNextInvoiceNumber,
@@ -50,6 +50,7 @@ export default function InvoiceForm() {
   const [products, setProducts]   = useState([])
   const [errors, setErrors]       = useState({})
   const [saving, setSaving]       = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [loading, setLoading]     = useState(isEdit)
   const [success, setSuccess]     = useState(false)
   const [apiError, setApiError]   = useState(null)
@@ -148,28 +149,31 @@ export default function InvoiceForm() {
   const balance = grandTotal - (Number(form.paid_amount) || 0)
 
   // ── Validation ──────────────────────────────────────────────────────────────
-  const validate = () => {
+  const validate = (isDraft = false) => {
     const e = {}
     if (!form.invoice_number.trim()) {
       e.invoice_number = 'Invoice number is required'
     } else if (!/^PFE00\d{3}$/.test(form.invoice_number.trim())) {
       e.invoice_number = 'Must follow format PFE00XXX (e.g. PFE00001)'
     }
-    if (!form.customer) e.customer = 'Please select a customer'
 
-    // Validate at least one valid item
-    const validItems = form.items.filter(it => it.product && Number(it.quantity) > 0 && Number(it.price) > 0)
-    if (validItems.length === 0) e.items = 'At least one line item with product, quantity, and price is required'
+    if (!isDraft) {
+      if (!form.customer) e.customer = 'Please select a customer'
 
-    // Per-item validation
-    form.items.forEach((it, i) => {
-      if (it.product) {
-        if (!it.quantity || Number(it.quantity) <= 0) e[`item_${i}_quantity`] = 'Invalid'
-        if (!it.price || Number(it.price) < 0) e[`item_${i}_price`] = 'Invalid'
-      }
-    })
+      // Validate at least one valid item
+      const validItems = form.items.filter(it => it.product && Number(it.quantity) > 0 && Number(it.price) > 0)
+      if (validItems.length === 0) e.items = 'At least one line item with product, quantity, and price is required'
 
-    if (form.paid_amount && Number(form.paid_amount) < 0) e.paid_amount = 'Cannot be negative'
+      // Per-item validation
+      form.items.forEach((it, i) => {
+        if (it.product) {
+          if (!it.quantity || Number(it.quantity) <= 0) e[`item_${i}_quantity`] = 'Invalid'
+          if (!it.price || Number(it.price) < 0) e[`item_${i}_price`] = 'Invalid'
+        }
+      })
+
+      if (form.paid_amount && Number(form.paid_amount) < 0) e.paid_amount = 'Cannot be negative'
+    }
 
     setErrors(e)
     return Object.keys(e).length === 0
@@ -219,6 +223,53 @@ export default function InvoiceForm() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Save as Draft ────────────────────────────────────────────────────────
+  const handleSaveDraft = async () => {
+    if (!validate(true)) return
+    setSavingDraft(true)
+    setApiError(null)
+
+    const validItems = form.items
+      .filter(it => it.product && Number(it.quantity) > 0)
+      .map(it => ({
+        product:  Number(it.product),
+        quantity: Number(it.quantity),
+        price:    Number(it.price) || 0,
+      }))
+
+    const payload = {
+      invoice_number: form.invoice_number.trim(),
+      status:         'DRAFT',
+      paid_amount:    Number(form.paid_amount) || 0,
+      items:          validItems,
+    }
+    if (form.customer) payload.customer = Number(form.customer)
+
+    try {
+      if (isEdit) {
+        await updateInvoice(id, payload)
+      } else {
+        await createInvoice(payload)
+      }
+      setSuccess(true)
+      setTimeout(() => navigate('/invoices'), 1200)
+    } catch (err) {
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const fieldErrors = {}
+        Object.entries(data).forEach(([key, val]) => {
+          fieldErrors[key] = Array.isArray(val) ? val[0] : val
+        })
+        setErrors(fieldErrors)
+        setApiError('Please fix the errors below.')
+      } else {
+        setApiError(err.response?.data?.detail || 'Something went wrong.')
+      }
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -714,18 +765,37 @@ export default function InvoiceForm() {
               </div>
             </div>
 
-            {/* Submit button */}
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={saving || success}
-              style={{ justifyContent: 'center', padding: '14px' }}
-            >
-              {saving
-                ? 'Saving…'
-                : <><MdSave /> {isEdit ? 'Update Invoice' : 'Create Invoice'}</>
-              }
-            </button>
+            {/* Action buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving || savingDraft || success}
+                style={{ justifyContent: 'center', padding: '14px' }}
+              >
+                {saving
+                  ? 'Saving…'
+                  : <><MdSave /> {isEdit ? 'Update Invoice' : 'Create Invoice'}</>
+                }
+              </button>
+              {!isEdit && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={saving || savingDraft || success}
+                  onClick={handleSaveDraft}
+                  style={{
+                    justifyContent: 'center', padding: '12px',
+                    borderStyle: 'dashed',
+                  }}
+                >
+                  {savingDraft
+                    ? 'Saving draft…'
+                    : <><MdDrafts /> Save as Draft</>
+                  }
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </form>
