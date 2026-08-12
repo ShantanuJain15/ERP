@@ -68,9 +68,7 @@
 
 
 
-from reportlab.lib.colors import black
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
 
 
@@ -85,6 +83,9 @@ class Supplier(models.Model):
     is_active      = models.BooleanField(default=True)
     created_at     = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        managed = False
+
     def __str__(self):
         return self.name
 
@@ -92,26 +93,52 @@ class Supplier(models.Model):
 # ─── Warehouse & stock location ───────────────────────────────────────────────
 
 class Warehouse(models.Model):
-    name      = models.CharField(max_length=255)
-    address   = models.TextField(blank=True)
+    WAREHOUSE_TYPES = [
+        ("MAIN", "Main"),
+        ("BRANCH", "Branch"),
+        ("STORE", "Store"),
+        ("VIRTUAL", "Virtual"),
+    ]
+
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=255)
+    warehouse_type = models.CharField(max_length=20, choices=WAREHOUSE_TYPES, default="MAIN")
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
 
     def __str__(self):
         return self.name
 
 
-class StockLocation(models.Model):
-    """Tracks how many units of a product sit in a specific warehouse bin."""
-    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="stock_locations")
-    product   = models.ForeignKey("Product",  on_delete=models.CASCADE, related_name="stock_locations")
-    bin_code  = models.CharField(max_length=50, blank=True, help_text="Aisle/shelf/bin reference")
-    quantity  = models.PositiveIntegerField(default=0)
+class WarehouseStock(models.Model):
+    """Current product quantity held by a warehouse."""
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="warehouse_stock")
+    product = models.ForeignKey("Product", on_delete=models.CASCADE, related_name="warehouse_stock")
+    quantity = models.IntegerField(default=0)
+    reserved_quantity = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("warehouse", "product", "bin_code")
+        managed = False
+        db_table = "inventory_warehousestock"
+        unique_together = ("warehouse", "product")
+
+    @property
+    def available_quantity(self):
+        return self.quantity - self.reserved_quantity
 
     def __str__(self):
-        return f"{self.product.sku} @ {self.warehouse} ({self.bin_code or 'default'})"
+        return f"{self.product.sku} @ {self.warehouse} ({self.quantity})"
 
 
 # ─── Product ──────────────────────────────────────────────────────────────────
@@ -129,8 +156,8 @@ class Product(models.Model):
     description    = models.TextField(blank=True,null=True)
     price          = models.DecimalField(max_digits=10, decimal_places=2)
 
-    # Aggregate quantity — updated by signals/service layer when StockTransaction is saved
-    quantity       = models.PositiveIntegerField(default=0)
+    # Aggregate quantity updated by the stock service from WarehouseStock totals.
+    quantity       = models.IntegerField(default=0)
     reorder_level  = models.PositiveIntegerField(default=0)
     
 
@@ -144,6 +171,7 @@ class Product(models.Model):
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         ordering = ["name"]
 
     def __str__(self):
@@ -173,38 +201,51 @@ class ACProduct(models.Model):
     energy_label     = models.CharField(max_length=10, choices=ENERGY_LABELS, blank=True)
     refrigerant_type = models.CharField(max_length=20, choices=REFRIGERANT_CHOICES, blank=True)
 
+    class Meta:
+        managed = False
+
     def __str__(self):
         return f"{self.product.sku} — {self.tonnage}TR ★{self.star_rating}"
 
 
 # ─── Stock transaction log ────────────────────────────────────────────────────
 
-class StockTransaction(models.Model):
-    TXN_TYPES = [
+class StockMovement(models.Model):
+    MOVEMENT_TYPES = [
         ("IN",       "Stock in (purchase receipt)"),
         ("OUT",      "Stock out (sale dispatch)"),
         ("ADJ_UP",   "Manual adjustment — increase"),
         ("ADJ_DOWN", "Manual adjustment — decrease"),
-        ("TRANSFER", "Warehouse transfer"),
         ("RETURN",   "Customer return"),
         ("DAMAGE",   "Damaged / write-off"),
     ]
+    REFERENCE_TYPES = [
+        ("PO", "Purchase Order"),
+        ("SO", "Sales Order"),
+        ("INVOICE", "Invoice"),
+        ("MANUAL", "Manual"),
+    ]
 
-    product         = models.ForeignKey(Product,   on_delete=models.PROTECT, related_name="stock_transactions")
-    warehouse       = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="stock_transactions")
-    txn_type        = models.CharField(max_length=20, choices=TXN_TYPES)
+    movement_number = models.CharField(max_length=50, unique=True)
+    product         = models.ForeignKey(Product,   on_delete=models.PROTECT, related_name="stock_movements")
+    warehouse       = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="stock_movements")
+    movement_type   = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
+    quantity        = models.PositiveIntegerField()
     quantity_change = models.IntegerField(help_text="Positive = in, negative = out")
-    # Loose reference so any PO/SO number can be stored without a hard FK
-    reference       = models.CharField(max_length=100, blank=True, help_text="PO/SO number or note")
+    reference_type  = models.CharField(max_length=20, choices=REFERENCE_TYPES, default="MANUAL")
+    reference_number = models.CharField(max_length=100, blank=True)
+    notes           = models.TextField(blank=True)
     performed_by    = models.CharField(max_length=150, blank=True)
     created_at      = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
+        db_table = "inventory_stockmovement"
         ordering = ["-created_at"]
 
     def __str__(self):
         sign = "+" if self.quantity_change >= 0 else ""
-        return f"{self.txn_type} {sign}{self.quantity_change} × {self.product.sku}"
+        return f"{self.movement_number} {self.movement_type} {sign}{self.quantity_change} x {self.product.sku}"
 
 
 # ─── Purchase Orders ──────────────────────────────────────────────────────────
@@ -229,6 +270,9 @@ class PurchaseOrder(models.Model):
     created_at    = models.DateTimeField(auto_now_add=True)
     updated_at    = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        managed = False
+
     def __str__(self):
         return f"PO {self.po_number} — {self.supplier}"
 
@@ -241,6 +285,7 @@ class POLineItem(models.Model):
     unit_price        = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
+        managed = False
         unique_together = ("purchase_order", "product")
 
     @property
@@ -274,6 +319,9 @@ class SalesOrder(models.Model):
     created_at    = models.DateTimeField(auto_now_add=True)
     updated_at    = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        managed = False
+
     def __str__(self):
         return f"SO {self.so_number} — {self.customer_name}"
 
@@ -285,6 +333,7 @@ class SOLineItem(models.Model):
     unit_price  = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
+        managed = False
         unique_together = ("sales_order", "product")
 
     @property
@@ -307,6 +356,9 @@ class Customer(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
     
+    class Meta:
+        managed = False
+
     def __str__(self):
         return self.name
     
@@ -335,6 +387,9 @@ class Invoice(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        managed = False
+
     def __str__(self):
         return self.invoice_number
     
@@ -353,6 +408,9 @@ class InvoiceItem(models.Model):
     description = models.TextField(blank=True, default="", help_text="Optional line item description")
 
     total = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        managed = False
 
     def save(self, *args, **kwargs):
         if not self.pk and self.invoice.status != "DRAFT":  # only deduct stock for non-draft invoices

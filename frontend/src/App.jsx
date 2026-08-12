@@ -6,7 +6,9 @@ import Products from './pages/Products'
 import ProductForm from './pages/ProductForm'
 import Categories from './pages/Categories'
 import Suppliers from './pages/Suppliers'
+import Warehouses from './pages/Warehouses'
 import StockMovements from './pages/StockMovements'
+import WarehouseStock from './pages/WarehouseStock'
 import Reports from './pages/Reports'
 import Customers from './pages/Customers'
 import CustomerForm from './pages/CustomerForm'
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="products/:id/edit" element={<ProductForm />} />
           <Route path="categories"       element={<Categories />} />
           <Route path="suppliers"        element={<Suppliers />} />
+          <Route path="warehouses"       element={<Warehouses />} />
+          <Route path="warehouse-stock"  element={<WarehouseStock />} />
           <Route path="stock-movements"  element={<StockMovements />} />
           <Route path="reports"          element={<Reports />} />
           <Route path="customers"        element={<Customers />} />

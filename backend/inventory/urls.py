@@ -3,7 +3,17 @@ from django.urls import include, path
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
 
-from .views import ProductViewSet, CustomerViewSet,InvoiceViewSet,InvoiceItemViewSet, OfferDiscoveryView, BrandOfferDiscoveryView
+from .views import (
+    BrandOfferDiscoveryView,
+    CustomerViewSet,
+    InvoiceItemViewSet,
+    InvoiceViewSet,
+    OfferDiscoveryView,
+    ProductViewSet,
+    StockMovementViewSet,
+    WarehouseViewSet,
+    WarehouseStockViewSet,
+)
 
 app_name = "inventory"
 
@@ -12,6 +22,9 @@ router.register("products", ProductViewSet, basename="product")
 router.register("customers", CustomerViewSet, basename="customer")
 router.register("invoices", InvoiceViewSet, basename="invoice")
 router.register("invoicesitem", InvoiceItemViewSet, basename="invoiceitem")
+router.register("warehouses", WarehouseViewSet, basename="warehouse")
+router.register("warehouse-stock", WarehouseStockViewSet, basename="warehousestock")
+router.register("stock-movements", StockMovementViewSet, basename="stockmovement")
 # router.register("acs", ACViewSet, basename="ac")
 
 urlpatterns = [

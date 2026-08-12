@@ -5,3 +5,5 @@ djangorestframework
 djangorestframework-simplejwt
 reportlab
 requests
+mysqlclient
+python-dotenv

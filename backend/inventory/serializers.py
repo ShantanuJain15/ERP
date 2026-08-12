@@ -2,7 +2,17 @@ import re
 
 from rest_framework import serializers
 
-from .models import  Product, ACProduct, Customer,Invoice,InvoiceItem
+from .models import (
+    ACProduct,
+    Customer,
+    Invoice,
+    InvoiceItem,
+    Product,
+    StockMovement,
+    Warehouse,
+    WarehouseStock,
+)
+from .services.stock import record_stock_movement
 
 
 class ACProductSerializer(serializers.ModelSerializer):
@@ -21,6 +31,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = "__all__"
+        read_only_fields = ["quantity", "last_modified_by_username", "created_at", "updated_at"]
 
     def get_fields(self):
         fields = super().get_fields()
@@ -35,6 +46,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         ac_data = validated_data.pop("ac_details", None)
+        validated_data["quantity"] = 0
+        if not (validated_data.get("sku") or "").strip():
+            validated_data["sku"] = self._next_sku(validated_data.get("name", ""))
         product = Product.objects.create(**validated_data)
 
         if product.type == "AC" and ac_data:
@@ -44,6 +58,11 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         ac_data = validated_data.pop("ac_details", None)
+        if "sku" in validated_data and not (validated_data.get("sku") or "").strip():
+            validated_data["sku"] = self._next_sku(
+                validated_data.get("name", instance.name),
+                exclude_pk=instance.pk,
+            )
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -64,6 +83,124 @@ class ProductSerializer(serializers.ModelSerializer):
             ACProduct.objects.filter(product=instance).delete()
 
         return instance
+
+    def validate(self, attrs):
+        if "quantity" in getattr(self, "initial_data", {}):
+            raise serializers.ValidationError({
+                "quantity": "Use stock movements to change quantity."
+            })
+        return attrs
+
+    @staticmethod
+    def _next_sku(name, exclude_pk=None):
+        base = re.sub(r"[^A-Za-z0-9]+", "-", name or "").strip("-").upper()
+        base = (base or "PRODUCT")[:40]
+
+        queryset = Product.objects.all()
+        if exclude_pk:
+            queryset = queryset.exclude(pk=exclude_pk)
+
+        if not queryset.filter(sku=base).exists():
+            return base
+
+        for sequence in range(1, 10000):
+            sku = f"{base}-{sequence:03d}"
+            if len(sku) > Product._meta.get_field("sku").max_length:
+                suffix = f"-{sequence:03d}"
+                sku = f"{base[:Product._meta.get_field('sku').max_length - len(suffix)]}{suffix}"
+            if not queryset.filter(sku=sku).exists():
+                return sku
+
+        raise serializers.ValidationError({"sku": "Could not generate a unique SKU."})
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehouse
+        fields = "__all__"
+
+
+class WarehouseStockSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    available_quantity = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = WarehouseStock
+        fields = [
+            "id",
+            "warehouse",
+            "warehouse_name",
+            "product",
+            "product_name",
+            "product_sku",
+            "quantity",
+            "reserved_quantity",
+            "available_quantity",
+            "updated_at",
+        ]
+        read_only_fields = ["quantity", "reserved_quantity", "available_quantity", "updated_at"]
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+
+    class Meta:
+        model = StockMovement
+        fields = [
+            "id",
+            "movement_number",
+            "warehouse",
+            "warehouse_name",
+            "product",
+            "product_name",
+            "product_sku",
+            "movement_type",
+            "quantity",
+            "quantity_change",
+            "reference_type",
+            "reference_number",
+            "notes",
+            "performed_by",
+            "created_at",
+        ]
+        read_only_fields = ["movement_number", "quantity_change", "performed_by", "created_at"]
+
+    def validate(self, attrs):
+        if self.instance:
+            return attrs
+
+        quantity = attrs.get("quantity")
+        movement_type = attrs.get("movement_type")
+
+        if quantity is None:
+            raise serializers.ValidationError({"quantity": "Quantity is required."})
+        if quantity <= 0:
+            raise serializers.ValidationError({"quantity": "Quantity must be greater than zero."})
+        if not movement_type:
+            raise serializers.ValidationError({"movement_type": "Movement type is required."})
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        performed_by = validated_data.get("performed_by", "")
+        if request and request.user and request.user.is_authenticated:
+            performed_by = request.user.username
+
+        return record_stock_movement(
+            warehouse=validated_data["warehouse"],
+            product=validated_data["product"],
+            movement_type=validated_data["movement_type"],
+            quantity=validated_data["quantity"],
+            reference_type=validated_data.get("reference_type", "MANUAL"),
+            reference_number=validated_data.get("reference_number", ""),
+            notes=validated_data.get("notes", ""),
+            performed_by=performed_by,
+        )
 
 
 # class ACSerializer(serializers.ModelSerializer):

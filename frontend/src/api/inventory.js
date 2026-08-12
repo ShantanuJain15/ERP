@@ -24,9 +24,21 @@ export const createSupplier = (data)  => api.post('/inventory/suppliers/', data)
 export const updateSupplier = (id, d) => api.put(`/inventory/suppliers/${id}/`, d)
 export const deleteSupplier = (id)    => api.delete(`/inventory/suppliers/${id}/`)
 
+// Warehouses
+export const getWarehouses   = (params) => api.get('/inventory/warehouses/', { params })
+export const getWarehouse    = (id)     => api.get(`/inventory/warehouses/${id}/`)
+export const createWarehouse = (data)   => api.post('/inventory/warehouses/', data)
+export const updateWarehouse = (id, d)  => api.put(`/inventory/warehouses/${id}/`, d)
+export const patchWarehouse  = (id, d)  => api.patch(`/inventory/warehouses/${id}/`, d)
+export const deleteWarehouse = (id)     => api.delete(`/inventory/warehouses/${id}/`)
+
+// Warehouse Stock
+export const getWarehouseStock = (params) => api.get('/inventory/warehouse-stock/', { params })
+
 // Stock Movements
 export const getStockMovements  = (params) => api.get('/inventory/stock-movements/', { params })
 export const createStockMovement = (data)  => api.post('/inventory/stock-movements/', data)
+export const getStockMovementStats = (params) => api.get('/inventory/stock-movements/stats/', { params })
 
 // Dashboard
 export const getDashboardStats = () => api.get('/inventory/dashboard/stats/')

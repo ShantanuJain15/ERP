@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { MdSave, MdArrowBack } from 'react-icons/md'
+import { MdInventory, MdSave, MdArrowBack, MdSwapVert } from 'react-icons/md'
 import { createProduct, updateProduct, getProduct, getSuppliers } from '../api/inventory'
 
 // ── Field must live OUTSIDE the parent component so React doesn't
@@ -62,7 +62,7 @@ const EMPTY_FORM = {
   supplier: '',
   description: '',
   price: '',
-  quantity: '',
+  quantity: 0,
   reorder_level: '',
   is_active: true,
   ac_details: { ...EMPTY_AC },
@@ -131,8 +131,6 @@ export default function ProductForm() {
     if (!form.price)       e.price = 'Price is required'
     else if (isNaN(Number(form.price)) || Number(form.price) < 0)
       e.price = 'Enter a valid price'
-    if (form.quantity !== '' && isNaN(Number(form.quantity)))
-      e.quantity = 'Quantity must be a number'
     // AC-specific validation
     if (form.type === 'AC') {
       const ac = form.ac_details
@@ -159,7 +157,6 @@ export default function ProductForm() {
       supplier:      form.supplier     || null,
       description:   form.description.trim() || '',
       price:         Number(form.price),
-      quantity:      form.quantity !== '' ? Number(form.quantity) : 0,
       reorder_level: form.reorder_level !== '' ? Number(form.reorder_level) : 0,
       is_active:     form.is_active,
     }
@@ -211,6 +208,19 @@ export default function ProductForm() {
     error:    errors[name],
     ...overrides,
   })
+
+  const currentQuantity = Number(form.quantity || 0)
+  const reorderLevel = Number(form.reorder_level || 0)
+  const stockLabel = currentQuantity === 0
+    ? 'Out of Stock'
+    : currentQuantity <= reorderLevel
+      ? 'Low Stock'
+      : 'In Stock'
+  const stockBadge = currentQuantity === 0
+    ? 'badge-danger'
+    : currentQuantity <= reorderLevel
+      ? 'badge-warning'
+      : 'badge-success'
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
@@ -449,8 +459,32 @@ export default function ProductForm() {
             <div className="card">
               <div className="card-title" style={{ marginBottom: 20 }}>Stock</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <Field label="Quantity" type="number" placeholder="0" {...field('quantity')} />
+                <div style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}>
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>Total Quantity</div>
+                    <div style={{ fontSize: 26, fontWeight: 800 }}>{currentQuantity}</div>
+                  </div>
+                  <span className={`badge ${stockBadge}`}>{stockLabel}</span>
+                </div>
                 <Field label="Reorder Level" type="number" placeholder="0" {...field('reorder_level')} />
+                {isEdit && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                    <Link to={`/warehouse-stock?product=${id}`} className="btn btn-outline btn-sm" style={{ justifyContent: 'center' }}>
+                      <MdInventory /> Warehouse Stock
+                    </Link>
+                    <Link to={`/stock-movements?product=${id}`} className="btn btn-outline btn-sm" style={{ justifyContent: 'center' }}>
+                      <MdSwapVert /> Stock Movements
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
 

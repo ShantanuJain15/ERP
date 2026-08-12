@@ -1,9 +1,27 @@
-# from django.db.models import Q
-from rest_framework import viewsets
+from django.db.models import Q
+from rest_framework import mixins, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
-from .models import  Product,Customer,Invoice,InvoiceItem
-from .serializers import ProductSerializer, CustomerSerializer,InvoiceSerializer,InvoiceItemSerializer
+from .models import (
+    Customer,
+    Invoice,
+    InvoiceItem,
+    POLineItem,
+    Product,
+    SOLineItem,
+    StockMovement,
+    Warehouse,
+    WarehouseStock,
+)
+from .serializers import (
+    CustomerSerializer,
+    InvoiceItemSerializer,
+    InvoiceSerializer,
+    ProductSerializer,
+    StockMovementSerializer,
+    WarehouseSerializer,
+    WarehouseStockSerializer,
+)
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -28,6 +46,100 @@ class IsAdminForCreateDelete(BasePermission):
 class StandardResultsSetPagination(LimitOffsetPagination) :
     default_limit = 2
     max_limit = 4
+
+
+class WarehouseViewSet(viewsets.ModelViewSet):
+    queryset = Warehouse.objects.all().order_by("name")
+    serializer_class = WarehouseSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        active = self.request.query_params.get("is_active")
+
+        if search:
+            queryset = queryset.filter(Q(name__icontains=search) | Q(address__icontains=search))
+        if active in {"true", "false"}:
+            queryset = queryset.filter(is_active=active == "true")
+
+        return queryset
+
+
+class WarehouseStockViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    queryset = WarehouseStock.objects.select_related("product", "warehouse").all().order_by(
+        "warehouse__name", "product__name"
+    )
+    serializer_class = WarehouseStockSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        product = self.request.query_params.get("product")
+        warehouse = self.request.query_params.get("warehouse")
+        search = self.request.query_params.get("search")
+
+        if product:
+            queryset = queryset.filter(product_id=product)
+        if warehouse:
+            queryset = queryset.filter(warehouse_id=warehouse)
+        if search:
+            queryset = queryset.filter(
+                Q(product__name__icontains=search)
+                | Q(product__sku__icontains=search)
+                | Q(warehouse__name__icontains=search)
+            )
+
+        return queryset
+
+
+class StockMovementViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = StockMovement.objects.select_related("product", "warehouse").all().order_by("-created_at")
+    serializer_class = StockMovementSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        product = self.request.query_params.get("product")
+        warehouse = self.request.query_params.get("warehouse")
+        movement_type = self.request.query_params.get("movement_type") or self.request.query_params.get("txn_type")
+        search = self.request.query_params.get("search")
+
+        if product:
+            queryset = queryset.filter(product_id=product)
+        if warehouse:
+            queryset = queryset.filter(warehouse_id=warehouse)
+        if movement_type and movement_type != "All":
+            if movement_type == "ADJ":
+                queryset = queryset.filter(movement_type__in=["ADJ_UP", "ADJ_DOWN"])
+            else:
+                queryset = queryset.filter(movement_type=movement_type)
+        if search:
+            queryset = queryset.filter(
+                Q(product__name__icontains=search)
+                | Q(product__sku__icontains=search)
+                | Q(movement_number__icontains=search)
+                | Q(reference_number__icontains=search)
+                | Q(notes__icontains=search)
+                | Q(warehouse__name__icontains=search)
+            )
+
+        return queryset
+
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request):
+        queryset = self.get_queryset()
+        positive_changes = queryset.filter(quantity_change__gt=0).values_list("quantity_change", flat=True)
+        negative_changes = queryset.filter(quantity_change__lt=0).values_list("quantity_change", flat=True)
+
+        return Response({
+            "total_stock_in": sum(positive_changes),
+            "total_stock_out": sum(abs(value) for value in negative_changes),
+            "total_movements": queryset.count(),
+            "total_transactions": queryset.count(),
+        })
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -75,6 +187,35 @@ class ProductViewSet(viewsets.ModelViewSet):
             # last_modified_by=self.request.user,
             last_modified_by_username=self.request.user.username
         )
+
+    def destroy(self, request, *args, **kwargs):
+        product = self.get_object()
+        blockers = []
+
+        if WarehouseStock.objects.filter(product=product).exists():
+            blockers.append("warehouse stock")
+        if StockMovement.objects.filter(product=product).exists():
+            blockers.append("stock movements")
+        if InvoiceItem.objects.filter(product=product).exists():
+            blockers.append("invoice items")
+        if POLineItem.objects.filter(product=product).exists():
+            blockers.append("purchase order lines")
+        if SOLineItem.objects.filter(product=product).exists():
+            blockers.append("sales order lines")
+
+        if blockers:
+            return Response(
+                {
+                    "detail": (
+                        "This product has business history and cannot be deleted. "
+                        "Mark it inactive instead."
+                    ),
+                    "blocked_by": blockers,
+                },
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
 
 # class ACViewSet(viewsets.ModelViewSet):

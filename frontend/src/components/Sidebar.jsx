@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   MdDashboard, MdInventory, MdCategory, MdLocalShipping,
-  MdSwapVert, MdBarChart, MdLogout, MdSettings,
+  MdSwapVert, MdBarChart, MdLogout, MdSettings, MdWarehouse,
   MdPeople, MdReceipt, MdPointOfSale, MdExpandMore, MdExpandLess
 } from 'react-icons/md'
 
@@ -11,6 +11,8 @@ const navItems = [
   { to: '/products',        icon: <MdInventory />,       label: 'Products' },
   { to: '/categories',      icon: <MdCategory />,        label: 'Categories' },
   { to: '/suppliers',       icon: <MdLocalShipping />,   label: 'Suppliers' },
+  { to: '/warehouses',      icon: <MdWarehouse />,       label: 'Warehouses' },
+  { to: '/warehouse-stock', icon: <MdWarehouse />,       label: 'Warehouse Stock' },
   { to: '/stock-movements', icon: <MdSwapVert />,        label: 'Stock Movements' },
   { to: '/reports',         icon: <MdBarChart />,        label: 'Reports' },
 ]

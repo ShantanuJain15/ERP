@@ -1,0 +1,32 @@
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/products/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/stock-movements/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/warehouses/?is_active=true[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/stock-movements/stats/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/products/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/stock-movements/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/warehouses/?is_active=true[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m3:16:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/inventory/stock-movements/stats/[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
