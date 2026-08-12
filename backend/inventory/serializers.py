@@ -97,11 +97,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = "__all__"
-        read_only_fields = ["total_amount"]
+        read_only_fields = ["total_amount", "version", "is_active", "parent"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data.pop("customer", None)  # hide raw FK id; customer_name is returned instead
+        # Keep customer id in response (edit form needs it)
         return data
 
     # ── INVOICE NUMBER VALIDATION & AUTO-GENERATION ──────────────────────────
@@ -157,120 +157,71 @@ class InvoiceSerializer(serializers.ModelSerializer):
         invoice.save()
         return invoice
 
-    # ── UPDATE (PATCH / PUT) with full dirty-checking ────────────────────────
+    # ── UPDATE — version-based (deactivate old → create new version) ────────
     def update(self, instance, validated_data):
         import decimal
 
         items_data = validated_data.pop("items", None)
 
-        # ── 1. Dirty-check scalar fields ──────────────────────────────────────
-        changed_fields = []
-        for attr, new_value in validated_data.items():
-            old_value = getattr(instance, attr)
-            # normalise Decimal comparisons
-            if isinstance(old_value, decimal.Decimal):
-                try:
-                    new_value = decimal.Decimal(str(new_value))
-                except Exception:
-                    pass
-            if old_value != new_value:
-                setattr(instance, attr, new_value)
-                changed_fields.append(attr)
+        # ── 1. Deactivate the current version ─────────────────────────────────
+        instance.is_active = False
+        instance.save(update_fields=["is_active"])
+
+        # ── 2. Restore stock for old items (they belong to the old version) ───
+        old_items = list(instance.items.select_related("product").all())
+        if instance.status != "DRAFT":
+            for old_item in old_items:
+                old_item.product.quantity += old_item.quantity
+                old_item.product.save(update_fields=["quantity"])
+
+        # ── 3. Build new invoice data ─────────────────────────────────────────
+        new_invoice_data = {
+            "invoice_number":           instance.invoice_number,
+            "customer":                 validated_data.get("customer", instance.customer),
+            "paid_amount":              validated_data.get("paid_amount", instance.paid_amount),
+            "status":                   validated_data.get("status", instance.status),
+            "version":                  instance.version + 1,
+            "parent":                   instance,
+            "is_active":                True,
+            "last_modified_by_username": validated_data.get(
+                "last_modified_by_username",
+                instance.last_modified_by_username,
+            ),
+        }
+
+        new_invoice = Invoice.objects.create(**new_invoice_data)
+
+        # ── 4. Create items on the new version ────────────────────────────────
+        if items_data is not None:
+            # Use the incoming items payload
+            for d in items_data:
+                InvoiceItem.objects.create(
+                    invoice=new_invoice,
+                    product=d["product"],
+                    quantity=int(d["quantity"]),
+                    price=decimal.Decimal(str(d["price"])),
+                    description=d.get("description", ""),
+                )
+        else:
+            # No items change — clone existing items to the new version
+            for old_item in old_items:
+                InvoiceItem.objects.create(
+                    invoice=new_invoice,
+                    product=old_item.product,
+                    quantity=old_item.quantity,
+                    price=old_item.price,
+                    description=old_item.description,
+                )
+
+        # ── 5. Recalculate total and sync status ─────────────────────────────
+        new_invoice.update_total()
 
         explicit_status = "status" in validated_data
-        if "paid_amount" in changed_fields and not explicit_status:
-            old_status = instance.status
-            self._sync_status(instance)
-            if instance.status != old_status:
-                changed_fields.append("status")
+        if not explicit_status:
+            self._sync_status(new_invoice)
+            new_invoice.save(update_fields=["status"])
 
-        if changed_fields:
-            instance.save(update_fields=changed_fields)
-
-        # ── 2. Smart per-item update ───────────────────────────────────────────
-        if items_data is not None:
-            # keyed by product_id for O(1) lookup
-            existing_map = {
-                item.product_id: item
-                for item in instance.items.select_related("product").all()
-            }
-            # validated_data already resolved FK → Product instance
-            incoming_map = {
-                d["product"].pk: d
-                for d in items_data
-            }
-
-            # Quick exit: are the sets and values identical?
-            def _items_identical():
-                if existing_map.keys() != incoming_map.keys():
-                    return False
-                for pid, d in incoming_map.items():
-                    ex = existing_map[pid]
-                    if (ex.quantity != int(d["quantity"]) or
-                            ex.price != decimal.Decimal(str(d["price"]))):
-                        return False
-                return True
-
-            if not _items_identical():
-
-                # ── 2a. update or add ─────────────────────────────────────────
-                for pid, d in incoming_map.items():
-                    new_qty   = int(d["quantity"])
-                    new_price = decimal.Decimal(str(d["price"]))
-
-                    if pid in existing_map:
-                        item = existing_map[pid]
-                        item_changed_fields = []
-
-                        if item.quantity != new_qty:
-                            delta = new_qty - item.quantity   # +ve = need more
-                            # adjust product stock by ONLY the delta
-                            item.product.quantity -= delta
-                            item.product.save(update_fields=["quantity"])
-                            item.quantity = new_qty
-                            item_changed_fields.append("quantity")
-
-                        if item.price != new_price:
-                            item.price = new_price
-                            item_changed_fields.append("price")
-
-                        if item_changed_fields:
-                            item.total = item.quantity * item.price
-                            item_changed_fields.append("total")
-                            # skip model-level save() side-effects by using
-                            # update_fields (pk exists → stock block skipped)
-                            item.save(update_fields=item_changed_fields)
-
-                    else:
-                        # brand-new item – InvoiceItem.save() deducts stock
-                        InvoiceItem.objects.create(
-                            invoice=instance,
-                            product=d["product"],
-                            quantity=new_qty,
-                            price=new_price,
-                        )
-
-                # ── 2b. remove dropped items, restore their stock ─────────────
-                for pid, item in existing_map.items():
-                    if pid not in incoming_map:
-                        item.product.quantity += item.quantity   # restore
-                        item.product.save(update_fields=["quantity"])
-                        item.delete()
-
-                # ── 2c. recalculate invoice total ─────────────────────────────
-                instance.update_total()
-
-                if not explicit_status:
-                    old_status = instance.status
-                    self._sync_status(instance)
-                    save_cols = ["total_amount"]
-                    if instance.status != old_status:
-                        save_cols.append("status")
-                    instance.save(update_fields=save_cols)
-                else:
-                    instance.save(update_fields=["total_amount"])
-
-        return instance
+        return new_invoice
 
 
 

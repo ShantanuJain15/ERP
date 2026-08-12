@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList,
-  MdRefresh, MdPictureAsPdf, MdEmail
+  MdRefresh, MdPictureAsPdf, MdEmail, MdHistory
 } from 'react-icons/md'
 import {
-  getInvoices, deleteInvoice, downloadInvoicePdf, sendInvoiceEmail
+  getInvoices, deleteInvoice, downloadInvoicePdf, sendInvoiceEmail,
+  getInvoiceVersionHistory
 } from '../api/inventory'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -43,6 +44,11 @@ export default function Invoices() {
   const [emailAddr, setEmailAddr]     = useState('')
   const [emailSending, setEmailSending] = useState(false)
   const [emailMsg, setEmailMsg]       = useState(null)
+
+  // version history modal state
+  const [historyModal, setHistoryModal] = useState(null)  // invoice object
+  const [historyData, setHistoryData]   = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   // ── fetch ─────────────────────────────────────────────────────────────────
 
@@ -104,6 +110,19 @@ export default function Invoices() {
   }
 
   // ── email send ────────────────────────────────────────────────────────────
+
+  const openHistoryModal = async (inv) => {
+    setHistoryModal(inv)
+    setHistoryLoading(true)
+    try {
+      const res = await getInvoiceVersionHistory(inv.id)
+      setHistoryData(Array.isArray(res.data) ? res.data : [])
+    } catch {
+      setHistoryData([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   const openEmailModal = (inv) => {
     setEmailModal(inv)
@@ -268,6 +287,13 @@ export default function Invoices() {
                       <MdEmail />
                     </button>
                     <button
+                      className="btn btn-outline btn-sm btn-icon"
+                      title="Version History"
+                      onClick={() => openHistoryModal(inv)}
+                    >
+                      <MdHistory />
+                    </button>
+                    <button
                       className="btn btn-danger btn-sm btn-icon"
                       title="Delete"
                       onClick={() => setDeleteId(inv.id)}
@@ -338,6 +364,64 @@ export default function Invoices() {
               <button className="btn btn-primary" onClick={handleSendEmail} disabled={emailSending || !emailAddr.trim()}>
                 {emailSending ? 'Sending…' : 'Send Email'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version History Modal */}
+      {historyModal && (
+        <div className="modal-overlay" onClick={() => setHistoryModal(null)}>
+          <div className="modal" style={{ width: 560, maxHeight: '70vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <MdHistory style={{ fontSize: 22, color: 'var(--accent)' }} />
+              Version History — {historyModal.invoice_number}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {historyLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[1,2,3].map(i => (
+                    <div key={i} className="skeleton" style={{ height: 48, borderRadius: 8 }} />
+                  ))}
+                </div>
+              ) : historyData.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>No version history found.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {historyData.map((ver, idx) => (
+                    <div
+                      key={ver.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 16px', borderRadius: 10,
+                        border: `1px solid ${ver.is_active ? 'var(--accent)' : 'var(--border)'}`,
+                        background: ver.is_active ? 'rgba(99,102,241,0.06)' : 'transparent',
+                        opacity: ver.is_active ? 1 : 0.6,
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                            Version {ver.version}
+                          </span>
+                          {ver.is_active && (
+                            <span className="badge badge-success" style={{ fontSize: 10, padding: '2px 8px' }}>Current</span>
+                          )}
+                          <span className={`badge ${STATUS_BADGE[ver.status] ?? 'badge-neutral'}`} style={{ fontSize: 10, padding: '2px 8px' }}>
+                            {ver.status}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {fmt(ver.created_at)} · Total: {fmtAmount(ver.total_amount)} · Paid: {fmtAmount(ver.paid_amount)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setHistoryModal(null)}>Close</button>
             </div>
           </div>
         </div>

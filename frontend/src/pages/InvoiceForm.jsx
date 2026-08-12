@@ -595,13 +595,28 @@ export default function InvoiceForm() {
                     }}
                   >
                     <option value="">— Select —</option>
-                    {products
-                      .filter(p => p.is_active && p.quantity > 0)
-                      .map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.sku ? `(${p.sku})` : ''}
-                      </option>
-                    ))}
+                    {(() => {
+                      const available = products.filter(p => p.is_active && p.quantity > 0)
+                      const selectedId = String(item.product)
+                      const isSelectedInList = available.some(p => String(p.id) === selectedId)
+                      const selectedProd = !isSelectedInList && selectedId
+                        ? products.find(p => String(p.id) === selectedId)
+                        : null
+                      return (
+                        <>
+                          {selectedProd && (
+                            <option key={selectedProd.id} value={selectedProd.id}>
+                              {selectedProd.name} {selectedProd.sku ? `(${selectedProd.sku})` : ''} (unavailable)
+                            </option>
+                          )}
+                          {available.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} {p.sku ? `(${p.sku})` : ''}
+                            </option>
+                          ))}
+                        </>
+                      )
+                    })()}
                   </select>
 
                   {/* Quantity */}
