@@ -364,7 +364,7 @@ class Customer(models.Model):
     
 class Invoice(models.Model):
 
-    invoice_number = models.CharField(max_length=50, unique=True)
+    invoice_number = models.CharField(max_length=50)  # uniqueness via unique_together below
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
     date = models.DateTimeField(auto_now_add=True)
     # invoice_items=
@@ -382,10 +382,21 @@ class Invoice(models.Model):
         default="DRAFT"
     )
 
+    # ── Versioning ────────────────────────────────────────────────────────────
+    version = models.PositiveIntegerField(default=1)
+    parent  = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='revisions',
+        help_text="Previous version of this invoice",
+    )
+
     is_active      = models.BooleanField(default=True)
     last_modified_by_username = models.CharField(max_length=150, blank=True)
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['invoice_number', 'version']]
 
     class Meta:
         managed = False

@@ -61,6 +61,7 @@ export const deleteInvoice    = (id)     => api.delete(`/inventory/invoices/${id
 export const downloadInvoicePdf = (id)  => api.get(`/inventory/invoices/${id}/download_pdf/`, { responseType: 'blob' })
 export const sendInvoiceEmail   = (id, email) => api.post(`/inventory/invoices/${id}/send_email_pdf/`, { email })
 export const getNextInvoiceNumber = ()        => api.get('/inventory/invoices/next-number/')
+export const getInvoiceVersionHistory = (id)  => api.get(`/inventory/invoices/${id}/version-history/`)
 
 // Invoice Items
 export const getInvoiceItems    = (params) => api.get('/inventory/invoicesitem/', { params })

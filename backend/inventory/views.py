@@ -249,11 +249,32 @@ class CustomerViewSet(viewsets.ModelViewSet):
 class InvoiceViewSet(viewsets.ModelViewSet) :
     queryset = Invoice.objects.all()#.order_by("-created_at")
     serializer_class=InvoiceSerializer
+
+    def get_queryset(self):
+        """Return only active (current) invoice versions by default."""
+        qs = super().get_queryset()
+        # Allow ?all_versions=true to see everything (admin debug)
+        if self.request.query_params.get("all_versions") == "true":
+            return qs
+        return qs.filter(is_active=True)
+
     def perform_create(self, serializer): # perform_create is then called by the create()
 
         serializer.save(
         last_modified_by_username=self.request.user.username
         )
+
+    @action(detail=True, methods=["get"], url_path="version-history")
+    def version_history(self, request, pk=None):
+        """Return all versions of the given invoice (by invoice_number)."""
+        invoice = self.get_object()
+        all_versions = (
+            Invoice.objects
+            .filter(invoice_number=invoice.invoice_number)
+            .order_by("-version")
+        )
+        serializer = self.get_serializer(all_versions, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=["get"], url_path="next-number")
     def next_number(self, request):
