@@ -84,7 +84,7 @@ class Supplier(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return self.name
@@ -114,7 +114,7 @@ class Warehouse(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return self.name
@@ -129,7 +129,7 @@ class WarehouseStock(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = "inventory_warehousestock"
         unique_together = ("warehouse", "product")
 
@@ -171,7 +171,7 @@ class Product(models.Model):
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         ordering = ["name"]
 
     def __str__(self):
@@ -202,7 +202,7 @@ class ACProduct(models.Model):
     refrigerant_type = models.CharField(max_length=20, choices=REFRIGERANT_CHOICES, blank=True)
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return f"{self.product.sku} — {self.tonnage}TR ★{self.star_rating}"
@@ -239,7 +239,7 @@ class StockMovement(models.Model):
     created_at      = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = "inventory_stockmovement"
         ordering = ["-created_at"]
 
@@ -271,7 +271,7 @@ class PurchaseOrder(models.Model):
     updated_at    = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return f"PO {self.po_number} — {self.supplier}"
@@ -285,7 +285,7 @@ class POLineItem(models.Model):
     unit_price        = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        managed = False
+        managed = True
         unique_together = ("purchase_order", "product")
 
     @property
@@ -320,7 +320,7 @@ class SalesOrder(models.Model):
     updated_at    = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return f"SO {self.so_number} — {self.customer_name}"
@@ -333,7 +333,7 @@ class SOLineItem(models.Model):
     unit_price  = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        managed = False
+        managed = True
         unique_together = ("sales_order", "product")
 
     @property
@@ -357,7 +357,7 @@ class Customer(models.Model):
     updated_at     = models.DateTimeField(auto_now=True)
     
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return self.name
@@ -399,7 +399,7 @@ class Invoice(models.Model):
         unique_together = [['invoice_number', 'version']]
 
     class Meta:
-        managed = False
+        managed = True
 
     def __str__(self):
         return self.invoice_number
@@ -421,7 +421,7 @@ class InvoiceItem(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        managed = False
+        managed = True
 
     def save(self, *args, **kwargs):
         if not self.pk and self.invoice.status != "DRAFT":  # only deduct stock for non-draft invoices
