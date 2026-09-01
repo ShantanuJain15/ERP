@@ -9,10 +9,32 @@ from .models import (
     InvoiceItem,
     Product,
     StockMovement,
+    Supplier,
     Warehouse,
     WarehouseStock,
 )
 from .services.stock import record_stock_movement
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    products_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Supplier
+        fields = [
+            "id",
+            "name",
+            "contact_person",
+            "email",
+            "phone",
+            "address",
+            "is_active",
+            "created_at",
+            "products_count",
+        ]
+
+    def get_products_count(self, obj):
+        return obj.products.count()
 
 
 class ACProductSerializer(serializers.ModelSerializer):
@@ -24,6 +46,7 @@ class ACProductSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     # last_modified_by = serializers.ReadOnlyField() # It not work since it is a foreign key(), (TypeError: Object of type User is not JSON serializable,)
     last_modified_by_username= serializers.ReadOnlyField() # Since this field is addded by perform_create, it will not be passed by the client, so it is read only fiel
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True, default=None)
     updated_at = serializers.ReadOnlyField()
     created_at = serializers.ReadOnlyField()
     ac_details = ACProductSerializer(required=False, allow_null=True)

@@ -11,6 +11,7 @@ from .views import (
     OfferDiscoveryView,
     ProductViewSet,
     StockMovementViewSet,
+    SupplierViewSet,
     WarehouseViewSet,
     WarehouseStockViewSet,
 )
@@ -19,6 +20,7 @@ app_name = "inventory"
 
 router = DefaultRouter()
 router.register("products", ProductViewSet, basename="product")
+router.register("suppliers", SupplierViewSet, basename="supplier")
 router.register("customers", CustomerViewSet, basename="customer")
 router.register("invoices", InvoiceViewSet, basename="invoice")
 router.register("invoicesitem", InvoiceItemViewSet, basename="invoiceitem")

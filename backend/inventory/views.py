@@ -10,6 +10,7 @@ from .models import (
     Product,
     SOLineItem,
     StockMovement,
+    Supplier,
     Warehouse,
     WarehouseStock,
 )
@@ -19,9 +20,32 @@ from .serializers import (
     InvoiceSerializer,
     ProductSerializer,
     StockMovementSerializer,
+    SupplierSerializer,
     WarehouseSerializer,
     WarehouseStockSerializer,
 )
+
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all().order_by("-created_at")
+    serializer_class = SupplierSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        is_active = self.request.query_params.get("is_active")
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search)
+                | Q(contact_person__icontains=search)
+                | Q(email__icontains=search)
+                | Q(phone__icontains=search)
+            )
+        if is_active in {"true", "false"}:
+            queryset = queryset.filter(is_active=is_active == "true")
+
+        return queryset
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
