@@ -4,7 +4,7 @@ import {
   MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList,
   MdArrowUpward, MdArrowDownward, MdRefresh
 } from 'react-icons/md'
-import { getProducts, deleteProduct } from '../api/inventory'
+import { getProducts, getSuppliers, deleteProduct } from '../api/inventory'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,16 +26,29 @@ const statusBadge = (p) => {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function Products() {
-  const [products, setProducts]   = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState(null)
-  const [search, setSearch]       = useState('')
-  const [sortKey, setSortKey]     = useState('name')
-  const [sortDir, setSortDir]     = useState('asc')
-  const [deleteId, setDeleteId]   = useState(null)
-  const [deleting, setDeleting]   = useState(false)
+  const [products, setProducts]       = useState([])
+  const [suppliersMap, setSuppliersMap] = useState({})
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
+  const [search, setSearch]           = useState('')
+  const [sortKey, setSortKey]         = useState('name')
+  const [sortDir, setSortDir]         = useState('asc')
+  const [deleteId, setDeleteId]       = useState(null)
+  const [deleting, setDeleting]       = useState(false)
 
-  // ── fetch ──────────────────────────────────────────────────────────────────
+  // ── fetch suppliers lookup ──────────────────────────────────────────────────
+  useEffect(() => {
+    getSuppliers()
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : res.data.results ?? []
+        const map = {}
+        list.forEach(s => { if (s.id && s.name) map[s.id] = s.name })
+        setSuppliersMap(map)
+      })
+      .catch(() => {})
+  }, [])
+
+  // ── fetch products ─────────────────────────────────────────────────────────
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -210,8 +223,8 @@ export default function Products() {
                 <td style={{ fontWeight: 500 }}>{p.name}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>{p.brand || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>
-                  {/* supplier is a FK id from the API — show id or name if nested */}
-                  {typeof p.supplier === 'object' ? p.supplier?.name : (p.supplier ?? '—')}
+                  {p.supplier_name ||
+                    (typeof p.supplier === 'object' ? p.supplier?.name : (suppliersMap[p.supplier] || '—'))}
                 </td>
                 <td>
                   <span style={{

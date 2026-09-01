@@ -19,7 +19,7 @@ export const updateCategory  = (id, d) => api.put(`/inventory/categories/${id}/`
 export const deleteCategory  = (id)    => api.delete(`/inventory/categories/${id}/`)
 
 // Suppliers
-export const getSuppliers   = ()      => api.get('/inventory/suppliers/')
+export const getSuppliers   = (params) => api.get('/inventory/suppliers/', { params })
 export const createSupplier = (data)  => api.post('/inventory/suppliers/', data)
 export const updateSupplier = (id, d) => api.put(`/inventory/suppliers/${id}/`, d)
 export const deleteSupplier = (id)    => api.delete(`/inventory/suppliers/${id}/`)
