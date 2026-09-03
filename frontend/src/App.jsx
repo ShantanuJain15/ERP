@@ -14,6 +14,7 @@ import Customers from './pages/Customers'
 import CustomerForm from './pages/CustomerForm'
 import Invoices from './pages/Invoices'
 import InvoiceForm from './pages/InvoiceForm'
+import InvoiceDetail from './pages/InvoiceDetail'
 
 const isLoggedIn = () => !!localStorage.getItem('access_token')
 
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="invoices"         element={<Invoices />} />
           <Route path="invoices/new"     element={<InvoiceForm />} />
           <Route path="invoices/:id/edit" element={<InvoiceForm />} />
+          <Route path="invoices/:id"     element={<InvoiceDetail />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

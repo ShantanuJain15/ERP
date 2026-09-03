@@ -1,32 +1,18 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList,
-  MdRefresh, MdPictureAsPdf, MdEmail, MdHistory
+  MdRefresh, MdPictureAsPdf, MdEmail, MdHistory, MdCallReceived
 } from 'react-icons/md'
 import {
-  getInvoices, deleteInvoice, downloadInvoicePdf, sendInvoiceEmail,
+  getInvoices, deleteInvoice, downloadInvoicePdf,
   getInvoiceVersionHistory
 } from '../api/inventory'
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-const fmt = (iso) => {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
-}
-
-const fmtAmount = (n) =>
-  Number(n ?? 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 })
-
-const STATUS_BADGE = {
-  PAID:    'badge-success',
-  PARTIAL: 'badge-warning',
-  PENDING: 'badge-danger',
-  DRAFT: 'badge-neutral',
-}
+import {
+  DAY_MS, STATUS_BADGE, fmt, fmtAmount,
+  startOfToday, dueDateOf, balanceOf, displayStatus, sortInvoices,
+} from '../utils/invoice'
+import SendInvoiceModal from '../components/SendInvoiceModal'
 
 // ── component ─────────────────────────────────────────────────────────────────
 
@@ -38,12 +24,11 @@ export default function Invoices() {
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [deleteId, setDeleteId]       = useState(null)
   const [deleting, setDeleting]       = useState(false)
+  const [selected, setSelected]       = useState([])   // invoice ids
+  const [bulkDelete, setBulkDelete]   = useState(false)
 
   // email modal state
   const [emailModal, setEmailModal]   = useState(null)   // invoice object
-  const [emailAddr, setEmailAddr]     = useState('')
-  const [emailSending, setEmailSending] = useState(false)
-  const [emailMsg, setEmailMsg]       = useState(null)
 
   // version history modal state
   const [historyModal, setHistoryModal] = useState(null)  // invoice object
@@ -57,7 +42,9 @@ export default function Invoices() {
     setError(null)
     try {
       const res = await getInvoices()
-      setInvoices(Array.isArray(res.data) ? res.data : res.data.results ?? [])
+      const rows = Array.isArray(res.data) ? res.data : res.data.results ?? []
+      setInvoices(sortInvoices(rows))
+      setSelected([])
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Failed to fetch invoices')
     } finally {
@@ -78,6 +65,51 @@ export default function Invoices() {
     return matchStatus && matchSearch
   })
 
+  // ── payment summary ───────────────────────────────────────────────────────
+
+  const summary = useMemo(() => {
+    const today = startOfToday()
+    const open = invoices.filter(i => i.status !== 'DRAFT' && balanceOf(i) > 0)
+
+    let outstanding = 0, dueToday = 0, dueIn30 = 0, overdue = 0
+
+    for (const inv of open) {
+      const bal = balanceOf(inv)
+      outstanding += bal
+
+      const due = dueDateOf(inv)
+      if (!due) continue
+      const days = Math.round((due - today) / DAY_MS)
+      if (days < 0)       overdue  += bal
+      else if (days === 0) dueToday += bal
+      else if (days <= 30) dueIn30  += bal
+    }
+
+    // Average collection time across settled invoices (issue date → last update).
+    const settled = invoices.filter(i => i.status === 'PAID' && i.date && i.updated_at)
+    const avgDays = settled.length
+      ? Math.round(
+          settled.reduce((sum, i) =>
+            sum + Math.max(0, (new Date(i.updated_at) - new Date(i.date)) / DAY_MS), 0
+          ) / settled.length
+        )
+      : 0
+
+    return { outstanding, dueToday, dueIn30, overdue, avgDays }
+  }, [invoices])
+
+  // ── selection ─────────────────────────────────────────────────────────────
+
+  const allSelected = filtered.length > 0 && filtered.every(i => selected.includes(i.id))
+
+  const toggleAll = () => {
+    setSelected(allSelected ? [] : filtered.map(i => i.id))
+  }
+
+  const toggleOne = (id) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
   // ── delete ────────────────────────────────────────────────────────────────
 
   const confirmDelete = async () => {
@@ -85,12 +117,30 @@ export default function Invoices() {
     try {
       await deleteInvoice(deleteId)
       setInvoices(prev => prev.filter(i => i.id !== deleteId))
+      setSelected(prev => prev.filter(x => x !== deleteId))
     } catch (err) {
       alert(err.response?.data?.detail || 'Delete failed. Please try again.')
     } finally {
       setDeleting(false)
       setDeleteId(null)
     }
+  }
+
+  const confirmBulkDelete = async () => {
+    setDeleting(true)
+    const failed = []
+    for (const id of selected) {
+      try {
+        await deleteInvoice(id)
+      } catch {
+        failed.push(id)
+      }
+    }
+    setInvoices(prev => prev.filter(i => !selected.includes(i.id) || failed.includes(i.id)))
+    setSelected(failed)
+    setDeleting(false)
+    setBulkDelete(false)
+    if (failed.length) alert(`${failed.length} invoice(s) could not be deleted.`)
   }
 
   // ── PDF download ──────────────────────────────────────────────────────────
@@ -124,25 +174,7 @@ export default function Invoices() {
     }
   }
 
-  const openEmailModal = (inv) => {
-    setEmailModal(inv)
-    setEmailAddr('')
-    setEmailMsg(null)
-  }
-
-  const handleSendEmail = async () => {
-    if (!emailAddr.trim()) return
-    setEmailSending(true)
-    setEmailMsg(null)
-    try {
-      await sendInvoiceEmail(emailModal.id, emailAddr.trim())
-      setEmailMsg({ type: 'success', text: 'Email sent successfully!' })
-    } catch (err) {
-      setEmailMsg({ type: 'error', text: err.response?.data || 'Failed to send email.' })
-    } finally {
-      setEmailSending(false)
-    }
-  }
+  const openEmailModal = (inv) => setEmailModal(inv)
 
   // ── summary counts ────────────────────────────────────────────────────────
 
@@ -152,6 +184,13 @@ export default function Invoices() {
   const draft   = invoices.filter(i => i.status === 'DRAFT').length
 
   // ── render ────────────────────────────────────────────────────────────────
+
+  const summaryCell = (label, value, tone) => (
+    <div style={{ flex: '1 1 160px', minWidth: 150 }}>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: tone ?? 'var(--text-primary)' }}>{value}</div>
+    </div>
+  )
 
   return (
     <>
@@ -185,6 +224,33 @@ export default function Invoices() {
         </div>
       )}
 
+      {/* Payment summary */}
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)', padding: '18px 24px', marginBottom: 20,
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+          color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 16,
+        }}>
+          Payment Summary
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{
+            width: 50, height: 50, borderRadius: '50%', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', fontSize: 24,
+          }}>
+            <MdCallReceived />
+          </div>
+          {summaryCell('Total Outstanding Receivables', fmtAmount(summary.outstanding))}
+          {summaryCell('Due Today', fmtAmount(summary.dueToday), 'var(--warning)')}
+          {summaryCell('Due Within 30 Days', fmtAmount(summary.dueIn30))}
+          {summaryCell('Overdue Invoices', fmtAmount(summary.overdue), summary.overdue > 0 ? 'var(--danger)' : undefined)}
+          {summaryCell('Average No. of Days for Getting Paid', `${summary.avgDays} Days`)}
+        </div>
+      </div>
+
       {/* Filter bar */}
       <div className="filter-bar">
         <div className="search-box" style={{ maxWidth: 340 }}>
@@ -209,26 +275,50 @@ export default function Invoices() {
         </div>
       </div>
 
-      {/* Summary pills */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div className="info-pill">Total: <strong>{invoices.length}</strong></div>
-        <div className="info-pill">Paid: <strong style={{ color: 'var(--success)' }}>{paid}</strong></div>
-        <div className="info-pill">Partial: <strong style={{ color: 'var(--warning)' }}>{partial}</strong></div>
-        <div className="info-pill">Pending: <strong style={{ color: 'var(--text-muted)' }}>{pending}</strong></div>
-        <div className="info-pill">Draft: <strong style={{ color: 'var(--text-muted)' }}>{draft}</strong></div>
-      </div>
+      {/* Summary pills / bulk action bar */}
+      {selected.length > 0 ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20,
+          padding: '10px 16px', borderRadius: 10,
+          background: 'rgba(99,102,241,0.08)', border: '1px solid var(--accent)',
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{selected.length} selected</span>
+          <button className="btn btn-danger btn-sm" onClick={() => setBulkDelete(true)}>
+            <MdDelete /> Delete
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => setSelected([])}>Clear</button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div className="info-pill">Total: <strong>{invoices.length}</strong></div>
+          <div className="info-pill">Paid: <strong style={{ color: 'var(--success)' }}>{paid}</strong></div>
+          <div className="info-pill">Partial: <strong style={{ color: 'var(--warning)' }}>{partial}</strong></div>
+          <div className="info-pill">Pending: <strong style={{ color: 'var(--text-muted)' }}>{pending}</strong></div>
+          <div className="info-pill">Draft: <strong style={{ color: 'var(--text-muted)' }}>{draft}</strong></div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Invoice #</th>
-              <th>Customer</th>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={filtered.length === 0}
+                  aria-label="Select all invoices"
+                />
+              </th>
               <th>Date</th>
-              <th>Total</th>
-              <th>Paid</th>
-              <th>Status</th>
+              <th>Invoice #</th>
+              <th>Customer Name</th>
+              <th>Invoice Status</th>
+              <th>Due Date</th>
+              <th style={{ textAlign: 'right' }}>Invoice Amount</th>
+              <th style={{ textAlign: 'right' }}>Balance</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -236,13 +326,13 @@ export default function Invoices() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j}><div className="skeleton" style={{ height: 16, borderRadius: 4 }} /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={9}>
                 <div className="empty-state">
                   <div className="empty-state-icon">🧾</div>
                   <div className="empty-state-text">No invoices found</div>
@@ -251,59 +341,84 @@ export default function Invoices() {
                   </div>
                 </div>
               </td></tr>
-            ) : filtered.map(inv => (
-              <tr key={inv.id}>
-                <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{inv.invoice_number}</td>
-                <td style={{ fontWeight: 500 }}>{inv.customer_name ?? `#${inv.customer}`}</td>
-                <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{fmt(inv.date)}</td>
-                <td style={{ fontWeight: 600 }}>{fmtAmount(inv.total_amount)}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{fmtAmount(inv.paid_amount)}</td>
-                <td>
-                  <span className={`badge ${STATUS_BADGE[inv.status] ?? 'badge-neutral'}`}>
-                    {inv.status}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <Link
-                      to={`/invoices/${inv.id}/edit`}
-                      className="btn btn-outline btn-sm btn-icon"
-                      title="Edit"
-                    >
-                      <MdEdit />
+            ) : filtered.map(inv => {
+              const st  = displayStatus(inv)
+              const due = dueDateOf(inv)
+              const bal = balanceOf(inv)
+              return (
+                <tr key={inv.id} style={selected.includes(inv.id) ? { background: 'rgba(99,102,241,0.06)' } : undefined}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(inv.id)}
+                      onChange={() => toggleOne(inv.id)}
+                      aria-label={`Select invoice ${inv.invoice_number}`}
+                    />
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{fmt(inv.date)}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    <Link to={`/invoices/${inv.id}`} style={{ color: 'var(--accent)' }}>
+                      {inv.invoice_number}
                     </Link>
-                    <button
-                      className="btn btn-outline btn-sm btn-icon"
-                      title="Download PDF"
-                      onClick={() => handleDownloadPdf(inv)}
-                    >
-                      <MdPictureAsPdf />
-                    </button>
-                    <button
-                      className="btn btn-outline btn-sm btn-icon"
-                      title="Send Email"
-                      onClick={() => openEmailModal(inv)}
-                    >
-                      <MdEmail />
-                    </button>
-                    <button
-                      className="btn btn-outline btn-sm btn-icon"
-                      title="Version History"
-                      onClick={() => openHistoryModal(inv)}
-                    >
-                      <MdHistory />
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm btn-icon"
-                      title="Delete"
-                      onClick={() => setDeleteId(inv.id)}
-                    >
-                      <MdDelete />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{inv.customer_name ?? `#${inv.customer}`}</td>
+                  <td>
+                    <span style={{ color: st.tone, fontSize: 12, fontWeight: 600, letterSpacing: '0.02em' }}>
+                      {st.label}
+                    </span>
+                    {inv.status === 'PARTIAL' && (
+                      <span className="badge badge-warning" style={{ fontSize: 10, padding: '2px 8px', marginLeft: 8 }}>
+                        PARTIAL
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{due ? fmt(due) : '—'}</td>
+                  <td style={{ fontWeight: 600, textAlign: 'right' }}>{fmtAmount(inv.total_amount)}</td>
+                  <td style={{ textAlign: 'right', color: bal > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    {fmtAmount(bal)}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <Link
+                        to={`/invoices/${inv.id}/edit`}
+                        className="btn btn-outline btn-sm btn-icon"
+                        title="Edit"
+                      >
+                        <MdEdit />
+                      </Link>
+                      <button
+                        className="btn btn-outline btn-sm btn-icon"
+                        title="Download PDF"
+                        onClick={() => handleDownloadPdf(inv)}
+                      >
+                        <MdPictureAsPdf />
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm btn-icon"
+                        title="Send Email"
+                        onClick={() => openEmailModal(inv)}
+                      >
+                        <MdEmail />
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm btn-icon"
+                        title="Version History"
+                        onClick={() => openHistoryModal(inv)}
+                      >
+                        <MdHistory />
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm btn-icon"
+                        title="Delete"
+                        onClick={() => setDeleteId(inv.id)}
+                      >
+                        <MdDelete />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -329,44 +444,30 @@ export default function Invoices() {
         </div>
       )}
 
-      {/* Send Email Modal */}
-      {emailModal && (
-        <div className="modal-overlay" onClick={() => !emailSending && setEmailModal(null)}>
-          <div className="modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
+      {/* Bulk Delete Confirm Modal */}
+      {bulkDelete && (
+        <div className="modal-overlay" onClick={() => !deleting && setBulkDelete(false)}>
+          <div className="modal" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <MdEmail style={{ fontSize: 22, color: 'var(--accent)' }} />
-              Email Invoice {emailModal.invoice_number}
+              <span style={{ color: 'var(--danger)', fontSize: 24 }}>⚠️</span>
+              Delete {selected.length} Invoices
             </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 14 }}>
-              Send the PDF of this invoice to a recipient email address.
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              This will permanently delete the {selected.length} selected invoices. This action cannot be undone.
             </p>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="Recipient email address"
-              value={emailAddr}
-              onChange={e => setEmailAddr(e.target.value)}
-              disabled={emailSending}
-              style={{ width: '100%', marginBottom: 12 }}
-            />
-            {emailMsg && (
-              <div style={{
-                padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 10,
-                background: emailMsg.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                color: emailMsg.type === 'success' ? 'var(--success)' : 'var(--danger)',
-                border: `1px solid ${emailMsg.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
-              }}>
-                {String(emailMsg.text)}
-              </div>
-            )}
             <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setEmailModal(null)} disabled={emailSending}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSendEmail} disabled={emailSending || !emailAddr.trim()}>
-                {emailSending ? 'Sending…' : 'Send Email'}
+              <button className="btn btn-outline" onClick={() => setBulkDelete(false)} disabled={deleting}>Cancel</button>
+              <button className="btn btn-danger" onClick={confirmBulkDelete} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete All'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Send Email Modal */}
+      {emailModal && (
+        <SendInvoiceModal invoice={emailModal} onClose={() => setEmailModal(null)} />
       )}
 
       {/* Version History Modal */}

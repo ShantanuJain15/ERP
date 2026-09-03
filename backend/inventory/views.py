@@ -271,7 +271,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
 
 class InvoiceViewSet(viewsets.ModelViewSet) :
-    queryset = Invoice.objects.all()#.order_by("-created_at")
+    queryset = (
+        Invoice.objects
+        .select_related("customer")
+        .prefetch_related("items__product")
+        .order_by("-date")
+    )
     serializer_class=InvoiceSerializer
 
     def get_queryset(self):

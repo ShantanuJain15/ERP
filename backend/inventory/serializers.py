@@ -1,5 +1,6 @@
 import re
 
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
@@ -240,6 +241,11 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
+    # Denormalised product info so the invoice document can be rendered
+    # without a second round-trip per line item.
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_sku  = serializers.CharField(source="product.sku",  read_only=True)
+
     class Meta:
         model = InvoiceItem
         fields = "__all__"
@@ -252,6 +258,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
     last_modified_by_username = serializers.ReadOnlyField()
     customer_name = serializers.CharField(source="customer.name", read_only=True)
+    # Full customer record (address/phone/email) for the Bill To block on the
+    # invoice document. 'customer' itself stays a writable PK.
+    customer_detail = CustomerSerializer(source="customer", read_only=True)
     invoice_number = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
@@ -318,6 +327,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return invoice
 
     # ── UPDATE — version-based (deactivate old → create new version) ────────
+    @transaction.atomic
     def update(self, instance, validated_data):
         import decimal
 
