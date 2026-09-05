@@ -2,10 +2,10 @@ import io
 from django.core.mail import EmailMessage
 from django.conf import settings
 
-from .invoice_pdf import generate_invoice_pdf
+from .invoice_pdf import DEFAULT_TEMPLATE, generate_invoice_pdf
 
 
-def send_invoice_email(invoice, recipient_email: str = None):
+def send_invoice_email(invoice, recipient_email: str = None, template: str = DEFAULT_TEMPLATE):
     """
     Generate a PDF for the given Invoice instance and send it as an email
     attachment to the customer.
@@ -14,6 +14,8 @@ def send_invoice_email(invoice, recipient_email: str = None):
         invoice:          An Invoice model instance (with related customer and items).
         recipient_email:  Override the destination address. If not provided the
                           customer's stored email address is used.
+        template:         "standard" or "classic" — the same document templates
+                          offered on the invoice detail page.
 
     Returns:
         The number of successfully sent messages (0 or 1).
@@ -31,7 +33,7 @@ def send_invoice_email(invoice, recipient_email: str = None):
 
     # ── Build PDF in memory ──────────────────────────────────────────────────
     buffer = io.BytesIO()
-    generate_invoice_pdf(buffer, invoice)
+    generate_invoice_pdf(buffer, invoice, template=template)
     buffer.seek(0)
     pdf_bytes = buffer.read()
     buffer.close()

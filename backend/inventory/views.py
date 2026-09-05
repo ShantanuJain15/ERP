@@ -316,20 +316,23 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
 
     @action(detail=True, methods=["get"])
     def download_pdf(self, request, pk=None):
+        """
+        GET .../download_pdf/?template=standard|classic
+
+        The template mirrors the Standard/Classic switch on the invoice detail
+        page. An unknown or missing value falls back to standard.
+        """
         invoice = self.get_object()
 
-           
-
         buffer = io.BytesIO()
-        generate_invoice_pdf(buffer, invoice)
-
+        generate_invoice_pdf(buffer, invoice, template=request.query_params.get("template"))
         buffer.seek(0)
 
         return HttpResponse(
             buffer,
             content_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="invoice_{invoice.id}.pdf"'
+                "Content-Disposition": f'attachment; filename="invoice_{invoice.invoice_number}.pdf"'
             },
         )
 
@@ -339,7 +342,7 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
         recepient_email = request.data.get("email")
         recepient_email=recepient_email.strip()
         try:
-            send_invoice_email(invoice, recepient_email)
+            send_invoice_email(invoice, recepient_email, template=request.data.get("template"))
             return Response("Email sent successfully", status=200)
         except ValueError as ve:
             return Response(str(ve), status=400)

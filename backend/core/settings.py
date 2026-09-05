@@ -177,9 +177,21 @@ EMAIL_HOST_USER     = "shantanujain1507@gmail.com"   # ← replace
 EMAIL_HOST_PASSWORD = "xijv srde doek lvfv"       # ← replace (use an App Password for Gmail)
 DEFAULT_FROM_EMAIL  = EMAIL_HOST_USER
 
-# ─── Company branding (used in invoice emails) ─────────────────────────────────
-COMPANY_NAME  = "Your Company Name"   # ← replace
-COMPANY_PHONE = "+91 98765 43210"     # ← replace
+# ─── Company branding (invoice emails + the invoice PDF header) ───────────────
+# Keep in sync with frontend/src/config/company.js, which prints the same block
+# on the on-screen invoice. There is no Company model, so these two are the
+# only definitions and they must agree.
+COMPANY_NAME    = "ShantanuJain"
+COMPANY_ADDRESS = "Tundla, Firozabad"
+COMPANY_CITY    = "Uttar Pradesh, India"
+COMPANY_PINCODE = "283204"
+COMPANY_EMAIL   = "shantanujain1507@gmail.com"
+COMPANY_PHONE   = "+91 98765 43210"
+COMPANY_GSTIN   = ""
+
+# Invoice payment terms, in days. Mirrors PAYMENT_TERM_DAYS in
+# frontend/src/utils/invoice.js — both derive the due date from the same rule.
+PAYMENT_TERM_DAYS = 30
 
 
 # ─── Pine Labs (Plural) API ─────────────────────────────────────────────────

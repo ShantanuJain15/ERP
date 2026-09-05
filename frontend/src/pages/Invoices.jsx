@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList,
-  MdRefresh, MdPictureAsPdf, MdEmail, MdHistory, MdCallReceived
+  MdAdd, MdSearch, MdDelete, MdFilterList,
+  MdRefresh, MdHistory, MdCallReceived
 } from 'react-icons/md'
 import {
   getInvoices, deleteInvoice, downloadInvoicePdf,
@@ -319,20 +319,19 @@ export default function Invoices() {
               <th>Due Date</th>
               <th style={{ textAlign: 'right' }}>Invoice Amount</th>
               <th style={{ textAlign: 'right' }}>Balance</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 9 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <td key={j}><div className="skeleton" style={{ height: 16, borderRadius: 4 }} /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9}>
+              <tr><td colSpan={8}>
                 <div className="empty-state">
                   <div className="empty-state-icon">🧾</div>
                   <div className="empty-state-text">No invoices found</div>
@@ -376,45 +375,6 @@ export default function Invoices() {
                   <td style={{ fontWeight: 600, textAlign: 'right' }}>{fmtAmount(inv.total_amount)}</td>
                   <td style={{ textAlign: 'right', color: bal > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                     {fmtAmount(bal)}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <Link
-                        to={`/invoices/${inv.id}/edit`}
-                        className="btn btn-outline btn-sm btn-icon"
-                        title="Edit"
-                      >
-                        <MdEdit />
-                      </Link>
-                      <button
-                        className="btn btn-outline btn-sm btn-icon"
-                        title="Download PDF"
-                        onClick={() => handleDownloadPdf(inv)}
-                      >
-                        <MdPictureAsPdf />
-                      </button>
-                      <button
-                        className="btn btn-outline btn-sm btn-icon"
-                        title="Send Email"
-                        onClick={() => openEmailModal(inv)}
-                      >
-                        <MdEmail />
-                      </button>
-                      <button
-                        className="btn btn-outline btn-sm btn-icon"
-                        title="Version History"
-                        onClick={() => openHistoryModal(inv)}
-                      >
-                        <MdHistory />
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm btn-icon"
-                        title="Delete"
-                        onClick={() => setDeleteId(inv.id)}
-                      >
-                        <MdDelete />
-                      </button>
-                    </div>
                   </td>
                 </tr>
               )

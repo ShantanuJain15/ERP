@@ -1,0 +1,526 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// ERP — design schema
+//
+// Paste into https://dbdiagram.io to render.
+//
+// THE RULE (see README.md):
+//   Tables marked  // IMPLEMENTED  are owned by models.py. Do NOT edit them
+//   here — this copy exists only so relationships render. To check whether
+//   code has drifted, GENERATE an ERD from the code and compare.
+//
+//   Everything else is DESIGN. Iterate freely; it is cheap here and expensive
+//   once there is a migration and data behind it.
+//
+// Open questions that affect this file are tracked in the module docs.
+// ═══════════════════════════════════════════════════════════════════════════
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MASTER DATA
+// ─────────────────────────────────────────────────────────────────────────────
+
+// IMPLEMENTED — inventory/models.py :: Supplier
+// NOTE: PK is currently 32-bit `int` (DEFAULT_AUTO_FIELD is unset project-wide).
+Table inventory_supplier {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  contact_person varchar(150)
+  email varchar(254)
+  phone varchar(30)
+  address text
+  is_active boolean [default: true]
+  created_at timestamp
+
+  Note: 'DESIGN: candidate for merging into a shared `party` table with customer.'
+}
+
+// IMPLEMENTED — inventory/models.py :: Customer
+Table inventory_customer {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  phone varchar(20) [unique]
+  email varchar(254) [unique]
+  address text
+  is_active boolean [default: true]
+  last_modified_by_username varchar(150)
+  created_at timestamp
+  updated_at timestamp
+
+  Note: 'DESIGN GAP: no gstin, no state (place of supply), no billing/shipping split.'
+}
+
+// IMPLEMENTED — inventory/models.py :: Warehouse
+Table inventory_warehouse {
+  id int [pk, increment]
+  code varchar(50) [unique, not null]
+  name varchar(255) [not null]
+  warehouse_type varchar(20) [default: 'MAIN', note: 'MAIN | BRANCH | STORE | VIRTUAL']
+  address text
+  city varchar(100)
+  state varchar(100)
+  country varchar(100)
+  phone varchar(30)
+  is_default boolean [default: false]
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+}
+
+// IMPLEMENTED — inventory/models.py :: Product
+Table inventory_product {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  type varchar(20) [note: 'AC | GENERIC']
+  sku varchar(64) [unique]
+  brand varchar(100) [note: 'DESIGN: should become FK to brand']
+  description text
+  price decimal(10,2) [not null, note: 'Selling price. No cost price is stored anywhere.']
+  quantity int [default: 0, note: 'Denormalized aggregate of warehouse_stock, kept by the stock service']
+  reorder_level int [default: 0]
+  supplier_id int
+  is_active boolean [default: true]
+  last_modified_by_username varchar(150)
+  created_at timestamp
+  updated_at timestamp
+
+  Note: 'DESIGN GAP: no hsn_code, no category_id, no uom, no cost price.'
+}
+
+// IMPLEMENTED — inventory/models.py :: ACProduct
+Table inventory_acproduct {
+  id int [pk, increment]
+  product_id int [unique, not null]
+  tonnage decimal(4,1) [not null]
+  star_rating int [default: 3]
+  energy_label varchar(10)
+  refrigerant_type varchar(20)
+
+  Note: 'DESIGN: 1:1 extension per product type does not scale past a few types.'
+}
+
+// DESIGN — the frontend already calls /inventory/categories/ and gets a 404.
+Table category {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  slug varchar(150) [unique, not null]
+  parent_id bigint [note: 'self-FK for a tree: Cooling > Air Conditioners > Split AC']
+  is_active boolean [default: true]
+  created_at timestamp
+}
+
+// DESIGN — statutory product classification, required on every GST invoice.
+Table hsn_code {
+  id bigint [pk, increment]
+  code varchar(10) [unique, not null]
+  description varchar(255)
+  gst_rate decimal(5,2) [not null, note: 'Default rate; the invoice line snapshots its own']
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STOCK
+// ─────────────────────────────────────────────────────────────────────────────
+
+// IMPLEMENTED — inventory/models.py :: WarehouseStock
+Table inventory_warehousestock {
+  id int [pk, increment]
+  warehouse_id int [not null]
+  product_id int [not null]
+  quantity int [default: 0]
+  reserved_quantity int [default: 0, note: 'EXISTS BUT NOTHING WRITES TO IT — see 03-order-to-cash.md']
+  updated_at timestamp
+
+  Indexes {
+    (warehouse_id, product_id) [unique]
+  }
+}
+
+// IMPLEMENTED — inventory/models.py :: StockMovement
+// The append-only ledger. This is the correct pattern; generalise it, don't replace it.
+Table inventory_stockmovement {
+  id int [pk, increment]
+  movement_number varchar(50) [unique, not null]
+  warehouse_id int [not null]
+  product_id int [not null]
+  movement_type varchar(20) [not null, note: 'IN | OUT | ADJ_UP | ADJ_DOWN | RETURN | DAMAGE']
+  quantity int [not null]
+  quantity_change int [not null, note: 'Positive = in, negative = out']
+  reference_type varchar(20) [default: 'MANUAL', note: 'PO | SO | INVOICE | MANUAL']
+  reference_number varchar(100)
+  notes text
+  performed_by varchar(150)
+  created_at timestamp
+
+  Note: 'DESIGN GAP: no valuation. Add unit_cost + value_change to enable stock valuation and margin.'
+}
+
+// DESIGN — one row per physical AC unit. Warranty attaches here, not to the product.
+Table serial_number {
+  id bigint [pk, increment]
+  serial varchar(100) [unique, not null]
+  product_id int [not null]
+  warehouse_id int [note: 'null once sold and delivered']
+  status varchar(20) [not null, default: 'IN_STOCK', note: 'IN_STOCK | RESERVED | DELIVERED | RETURNED | SCRAPPED']
+  goods_receipt_line_id bigint [note: 'how it came in']
+  delivery_note_line_id bigint [note: 'how it went out']
+  warranty_start_date date
+  warranty_months int
+  created_at timestamp
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER TO CASH
+// ─────────────────────────────────────────────────────────────────────────────
+
+// IMPLEMENTED — inventory/models.py :: SalesOrder
+// DESIGN CHANGE: customer_name/customer_phone become a real customer_id FK.
+Table inventory_salesorder {
+  id int [pk, increment]
+  so_number varchar(50) [unique, not null]
+  customer_name varchar(255) [not null, note: 'DEPRECATED — replace with customer_id']
+  customer_phone varchar(30) [note: 'DEPRECATED — backfill customer_id by matching this']
+  customer_id bigint [note: 'DESIGN — the fix']
+  warehouse_id int [not null]
+  status varchar(20) [default: 'PENDING', note: 'DESIGN: DRAFT | CONFIRMED | PARTIALLY_DELIVERED | DELIVERED | CLOSED | CANCELLED']
+  order_date date
+  expected_delivery_date date [note: 'DESIGN']
+  notes text
+  created_by varchar(150)
+  created_at timestamp
+  updated_at timestamp
+}
+
+// IMPLEMENTED — inventory/models.py :: SOLineItem
+Table inventory_solineitem {
+  id int [pk, increment]
+  sales_order_id int [not null]
+  product_id int [not null]
+  quantity int [not null]
+  quantity_delivered int [default: 0, note: 'DESIGN — enables partial delivery']
+  unit_price decimal(10,2) [not null]
+
+  Indexes {
+    (sales_order_id, product_id) [unique]
+  }
+}
+
+// DESIGN — the document that actually moves stock out in the delivery flow.
+Table delivery_note {
+  id bigint [pk, increment]
+  dn_number varchar(50) [unique, not null]
+  sales_order_id int [not null]
+  customer_id int [not null]
+  warehouse_id int [not null]
+  status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT | DISPATCHED | DELIVERED | CANCELLED']
+  dispatch_date date
+  delivered_date date
+  notes text
+  created_by_id int
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table delivery_note_line {
+  id bigint [pk, increment]
+  delivery_note_id bigint [not null]
+  so_line_item_id int [not null]
+  product_id int [not null]
+  quantity decimal(12,3) [not null]
+}
+
+// IMPLEMENTED — inventory/models.py :: Invoice
+Table inventory_invoice {
+  id int [pk, increment]
+  invoice_number varchar(50) [unique, not null]
+  customer_id int [not null]
+
+  // ── DESIGN: the missing links ──
+  warehouse_id int [note: 'DESIGN — without this the invoice cannot post stock through the service']
+  sales_order_id int [note: 'DESIGN — nullable: counter sales have no order']
+  updates_stock boolean [default: false, note: 'DESIGN — true for counter sales; false when a delivery note already moved it']
+
+  date timestamp
+  place_of_supply varchar(2) [note: 'DESIGN — state code; decides CGST+SGST vs IGST']
+
+  // ── DESIGN: money breakdown. Today only total_amount exists. ──
+  subtotal decimal(14,2) [default: 0, note: 'DESIGN — sum of line taxable amounts']
+  discount_amount decimal(14,2) [default: 0, note: 'DESIGN']
+  tax_total decimal(14,2) [default: 0, note: 'DESIGN — sum of line tax amounts']
+  total_amount decimal(10,2) [default: 0, note: 'grand total']
+  paid_amount decimal(10,2) [default: 0, note: 'DESIGN: derive from payment_allocation, do not store raw']
+
+  status varchar(20) [default: 'DRAFT', note: 'DESIGN: DRAFT | ISSUED | PARTIALLY_PAID | PAID | CREDITED | CANCELLED']
+  version int [default: 1, note: 'DESIGN: replace with credit notes — an issued tax invoice is immutable']
+  parent_id int
+  is_active boolean [default: true]
+  last_modified_by_username varchar(150)
+  created_at timestamp
+  updated_at timestamp
+
+  Indexes {
+    (invoice_number, version) [unique, note: 'Declared in models.py but SILENTLY DROPPED — duplicate class Meta at models.py:398-402']
+  }
+}
+
+// IMPLEMENTED — inventory/models.py :: InvoiceItem
+Table inventory_invoiceitem {
+  id int [pk, increment]
+  invoice_id int [not null]
+  product_id int [not null]
+  quantity int [not null]
+  price decimal(10,2) [not null, note: 'snapshotted at issue — correct, do not read live from product']
+  description text
+  total decimal(10,2) [not null]
+
+  // ── DESIGN: GST lives on the line. Rates differ per product, and GST
+  //    returns need an HSN-wise breakup, so an invoice-level tax field
+  //    cannot work. Amounts are STORED, never recomputed on read — a
+  //    historical invoice must show the tax it was actually issued with.
+  hsn_code varchar(10) [note: 'DESIGN — snapshotted']
+  gst_rate decimal(5,2) [note: 'DESIGN — snapshotted']
+  taxable_amount decimal(14,2) [note: 'DESIGN']
+  cgst_amount decimal(14,2) [default: 0, note: 'DESIGN — intra-state only']
+  sgst_amount decimal(14,2) [default: 0, note: 'DESIGN — intra-state only; always == cgst_amount']
+  igst_amount decimal(14,2) [default: 0, note: 'DESIGN — inter-state only']
+  line_total decimal(14,2) [note: 'DESIGN — taxable + tax']
+}
+
+// DESIGN — replaces the scalar invoice.paid_amount.
+// One payment can settle several invoices; one invoice can take several
+// payments. Hence the allocation table.
+Table payment {
+  id bigint [pk, increment]
+  payment_number varchar(50) [unique, not null]
+  customer_id int [not null]
+  amount decimal(14,2) [not null]
+  method varchar(20) [not null, note: 'CASH | CARD | UPI | NEFT | CHEQUE | PINELABS']
+  status varchar(20) [not null, default: 'RECEIVED', note: 'PENDING | RECEIVED | FAILED | REFUNDED']
+  received_date date [not null]
+  reference varchar(150) [note: 'UTR / cheque no / Pine Labs txn id']
+  gateway_payload jsonb [note: 'raw Pine Labs response, for reconciliation']
+  notes text
+  created_by_id int
+  created_at timestamp
+}
+
+Table payment_allocation {
+  id bigint [pk, increment]
+  payment_id bigint [not null]
+  invoice_id int [not null]
+  amount decimal(14,2) [not null]
+  created_at timestamp
+
+  Indexes {
+    (payment_id, invoice_id) [unique]
+  }
+}
+
+// DESIGN — the legal way to reverse an issued invoice. Required by GST;
+// you cannot simply edit or delete a tax invoice that has been issued.
+Table credit_note {
+  id bigint [pk, increment]
+  cn_number varchar(50) [unique, not null]
+  invoice_id int [not null]
+  customer_id int [not null]
+  reason varchar(30) [not null, note: 'RETURN | PRICE_CORRECTION | CANCELLATION | DISCOUNT']
+  status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT | ISSUED | CANCELLED']
+  goods_returned boolean [default: false, note: 'if true, stock moves back in']
+  warehouse_id int [note: 'where returned goods land']
+  subtotal decimal(14,2) [default: 0]
+  tax_total decimal(14,2) [default: 0]
+  total_amount decimal(14,2) [default: 0]
+  issue_date date
+  created_at timestamp
+}
+
+Table credit_note_line {
+  id bigint [pk, increment]
+  credit_note_id bigint [not null]
+  invoice_item_id int [not null]
+  product_id int [not null]
+  quantity decimal(12,3) [not null]
+  unit_price decimal(14,2) [not null]
+  gst_rate decimal(5,2)
+  taxable_amount decimal(14,2)
+  cgst_amount decimal(14,2) [default: 0]
+  sgst_amount decimal(14,2) [default: 0]
+  igst_amount decimal(14,2) [default: 0]
+  line_total decimal(14,2)
+}
+
+// DESIGN — fixes the numbering race.
+// InvoiceSerializer._next_invoice_number() currently finds the max via a
+// __regex scan, so two concurrent invoices can read the same maximum and
+// take the same number. This table is incremented under a row lock instead.
+Table number_series {
+  id bigint [pk, increment]
+  document_type varchar(30) [unique, not null, note: 'INVOICE | SO | PO | DN | PAYMENT | CN | GRN']
+  prefix varchar(20) [not null]
+  next_number int [not null, default: 1]
+  padding int [not null, default: 5]
+  updated_at timestamp
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCURE TO PAY  (see 02-procure-to-pay.md)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// IMPLEMENTED — inventory/models.py :: PurchaseOrder
+Table inventory_purchaseorder {
+  id int [pk, increment]
+  po_number varchar(50) [unique, not null]
+  supplier_id int [not null]
+  warehouse_id int [not null]
+  status varchar(20) [default: 'DRAFT']
+  expected_date date
+  received_date date
+  notes text
+  created_by varchar(150)
+  created_at timestamp
+  updated_at timestamp
+}
+
+// IMPLEMENTED — inventory/models.py :: POLineItem
+Table inventory_polineitem {
+  id int [pk, increment]
+  purchase_order_id int [not null]
+  product_id int [not null]
+  quantity_ordered int [not null]
+  quantity_received int [default: 0, note: 'DESIGN PROBLEM: conflates ordering with receiving. Partial deliveries across dates cannot be recorded. Move to goods_receipt.']
+  unit_price decimal(10,2) [not null]
+
+  Indexes {
+    (purchase_order_id, product_id) [unique]
+  }
+}
+
+// DESIGN — the document that actually moves stock in.
+Table goods_receipt {
+  id bigint [pk, increment]
+  grn_number varchar(50) [unique, not null]
+  purchase_order_id int
+  supplier_id int [not null]
+  warehouse_id int [not null]
+  status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT | RECEIVED | CANCELLED']
+  received_date date [not null]
+  supplier_dc_number varchar(100) [note: "supplier's delivery challan"]
+  notes text
+  created_at timestamp
+}
+
+Table goods_receipt_line {
+  id bigint [pk, increment]
+  goods_receipt_id bigint [not null]
+  po_line_item_id int
+  product_id int [not null]
+  quantity decimal(12,3) [not null]
+  unit_cost decimal(14,2) [not null, note: 'the missing piece for stock valuation and margin']
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RELATIONSHIPS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Master data
+Ref: inventory_product.supplier_id > inventory_supplier.id
+Ref: inventory_acproduct.product_id - inventory_product.id
+Ref: category.parent_id > category.id
+
+// Stock
+Ref: inventory_warehousestock.warehouse_id > inventory_warehouse.id
+Ref: inventory_warehousestock.product_id > inventory_product.id
+Ref: inventory_stockmovement.warehouse_id > inventory_warehouse.id
+Ref: inventory_stockmovement.product_id > inventory_product.id
+Ref: serial_number.product_id > inventory_product.id
+Ref: serial_number.warehouse_id > inventory_warehouse.id
+Ref: serial_number.goods_receipt_line_id > goods_receipt_line.id
+Ref: serial_number.delivery_note_line_id > delivery_note_line.id
+
+// Order to cash
+Ref: inventory_salesorder.customer_id > inventory_customer.id
+Ref: inventory_salesorder.warehouse_id > inventory_warehouse.id
+Ref: inventory_solineitem.sales_order_id > inventory_salesorder.id
+Ref: inventory_solineitem.product_id > inventory_product.id
+
+Ref: delivery_note.sales_order_id > inventory_salesorder.id
+Ref: delivery_note.customer_id > inventory_customer.id
+Ref: delivery_note.warehouse_id > inventory_warehouse.id
+Ref: delivery_note_line.delivery_note_id > delivery_note.id
+Ref: delivery_note_line.so_line_item_id > inventory_solineitem.id
+Ref: delivery_note_line.product_id > inventory_product.id
+
+Ref: inventory_invoice.customer_id > inventory_customer.id
+Ref: inventory_invoice.warehouse_id > inventory_warehouse.id
+Ref: inventory_invoice.sales_order_id > inventory_salesorder.id
+Ref: inventory_invoice.parent_id > inventory_invoice.id
+Ref: inventory_invoiceitem.invoice_id > inventory_invoice.id
+Ref: inventory_invoiceitem.product_id > inventory_product.id
+
+Ref: payment.customer_id > inventory_customer.id
+Ref: payment_allocation.payment_id > payment.id
+Ref: payment_allocation.invoice_id > inventory_invoice.id
+
+Ref: credit_note.invoice_id > inventory_invoice.id
+Ref: credit_note.customer_id > inventory_customer.id
+Ref: credit_note.warehouse_id > inventory_warehouse.id
+Ref: credit_note_line.credit_note_id > credit_note.id
+Ref: credit_note_line.invoice_item_id > inventory_invoiceitem.id
+Ref: credit_note_line.product_id > inventory_product.id
+
+// Procure to pay
+Ref: inventory_purchaseorder.supplier_id > inventory_supplier.id
+Ref: inventory_purchaseorder.warehouse_id > inventory_warehouse.id
+Ref: inventory_polineitem.purchase_order_id > inventory_purchaseorder.id
+Ref: inventory_polineitem.product_id > inventory_product.id
+
+Ref: goods_receipt.purchase_order_id > inventory_purchaseorder.id
+Ref: goods_receipt.supplier_id > inventory_supplier.id
+Ref: goods_receipt.warehouse_id > inventory_warehouse.id
+Ref: goods_receipt_line.goods_receipt_id > goods_receipt.id
+Ref: goods_receipt_line.po_line_item_id > inventory_polineitem.id
+Ref: goods_receipt_line.product_id > inventory_product.id
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+TableGroup "Master data" {
+  inventory_supplier
+  inventory_customer
+  inventory_warehouse
+  inventory_product
+  inventory_acproduct
+  category
+  hsn_code
+}
+
+TableGroup "Stock" {
+  inventory_warehousestock
+  inventory_stockmovement
+  serial_number
+}
+
+TableGroup "Order to cash" {
+  inventory_salesorder
+  inventory_solineitem
+  delivery_note
+  delivery_note_line
+  inventory_invoice
+  inventory_invoiceitem
+  payment
+  payment_allocation
+  credit_note
+  credit_note_line
+}
+
+TableGroup "Procure to pay" {
+  inventory_purchaseorder
+  inventory_polineitem
+  goods_receipt
+  goods_receipt_line
+}
+
+TableGroup "Cross-cutting" {
+  number_series
+}

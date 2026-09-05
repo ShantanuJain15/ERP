@@ -107,7 +107,7 @@ export default function InvoiceDetail() {
   const handleDownloadPdf = async () => {
     setBusy(true)
     try {
-      const res = await downloadInvoicePdf(invoice.id)
+      const res = await downloadInvoicePdf(invoice.id, template)
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
       const a = document.createElement('a')
       a.href = url
@@ -320,7 +320,7 @@ export default function InvoiceDetail() {
 
       {/* ── Modals ──────────────────────────────────────────────────────── */}
       {emailOpen && (
-        <SendInvoiceModal invoice={invoice} onClose={() => setEmailOpen(false)} />
+        <SendInvoiceModal invoice={invoice} template={template} onClose={() => setEmailOpen(false)} />
       )}
 
       {confirmDel && (

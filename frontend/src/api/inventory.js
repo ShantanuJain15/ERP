@@ -58,8 +58,12 @@ export const createInvoice    = (data)   => api.post('/inventory/invoices/', dat
 export const updateInvoice    = (id, d)  => api.put(`/inventory/invoices/${id}/`, d)
 export const patchInvoice     = (id, d)  => api.patch(`/inventory/invoices/${id}/`, d)
 export const deleteInvoice    = (id)     => api.delete(`/inventory/invoices/${id}/`)
-export const downloadInvoicePdf = (id)  => api.get(`/inventory/invoices/${id}/download_pdf/`, { responseType: 'blob' })
-export const sendInvoiceEmail   = (id, email) => api.post(`/inventory/invoices/${id}/send_email_pdf/`, { email })
+// `template` is 'standard' | 'classic' — matches the switch on the invoice
+// detail page, so the PDF looks like the document that was on screen.
+export const downloadInvoicePdf = (id, template) =>
+  api.get(`/inventory/invoices/${id}/download_pdf/`, { params: { template }, responseType: 'blob' })
+export const sendInvoiceEmail   = (id, email, template) =>
+  api.post(`/inventory/invoices/${id}/send_email_pdf/`, { email, template })
 export const getNextInvoiceNumber = ()        => api.get('/inventory/invoices/next-number/')
 export const getInvoiceVersionHistory = (id)  => api.get(`/inventory/invoices/${id}/version-history/`)
 

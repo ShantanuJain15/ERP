@@ -131,6 +131,18 @@
 .invoice-paper p { margin: 0 0 4px; }
 .invoice-paper table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
+/* index.css styles the app's dark-theme data tables with `tbody td { color:
+   var(--text-primary) }` plus a dark row border and hover. Those rules match
+   the paper's cells DIRECTLY, and a directly-matching rule always beats an
+   inherited one — so `color` on .invoice-paper above never reaches them and
+   near-white text lands on white paper. The paper must restate its own values.
+   Kept low-specificity (one class) so the .k / .idx / .num rules below, which
+   carry two, still win. */
+.invoice-paper tbody td,
+.invoice-paper tbody th { color: var(--p-ink); }
+.invoice-paper tbody tr { border-bottom: none; }
+.invoice-paper tbody tr:hover { background: transparent; }
+
 .invoice-paper--classic {
   font-family: Georgia, 'Times New Roman', serif;
   --p-accent: #111827;

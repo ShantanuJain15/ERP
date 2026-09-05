@@ -9,7 +9,7 @@ import { sendInvoiceEmail } from '../api/inventory'
  * The send button stays disabled while the address is empty — the backend
  * strips the address before null-checking it, so an empty POST is a 500.
  */
-export default function SendInvoiceModal({ invoice, onClose, onSent }) {
+export default function SendInvoiceModal({ invoice, onClose, onSent, template }) {
   const [addr, setAddr]       = useState(invoice?.customer_detail?.email ?? '')
   const [sending, setSending] = useState(false)
   const [msg, setMsg]         = useState(null)
@@ -21,7 +21,7 @@ export default function SendInvoiceModal({ invoice, onClose, onSent }) {
     setSending(true)
     setMsg(null)
     try {
-      await sendInvoiceEmail(invoice.id, addr.trim())
+      await sendInvoiceEmail(invoice.id, addr.trim(), template)
       setMsg({ type: 'success', text: 'Email sent successfully!' })
       onSent?.()
     } catch (err) {
