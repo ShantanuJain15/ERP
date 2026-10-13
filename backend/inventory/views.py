@@ -3,11 +3,16 @@ from rest_framework import mixins, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
 from .models import (
+    Bill,
     Customer,
+    GoodsReceipt,
+    HSNCode,
     Invoice,
     InvoiceItem,
     POLineItem,
+    PaymentOut,
     Product,
+    PurchaseOrder,
     SOLineItem,
     StockMovement,
     Supplier,
@@ -15,15 +20,35 @@ from .models import (
     WarehouseStock,
 )
 from .serializers import (
+    BillSerializer,
     CustomerSerializer,
+    GoodsReceiptSerializer,
+    HSNCodeSerializer,
     InvoiceItemSerializer,
     InvoiceSerializer,
+    PaymentOutSerializer,
     ProductSerializer,
+    PurchaseOrderSerializer,
     StockMovementSerializer,
     SupplierSerializer,
     WarehouseSerializer,
     WarehouseStockSerializer,
 )
+from .services import purchase as purchase_service
+from .services.numbering import peek_document_number
+
+
+def _username(request):
+    """Best-effort actor name for audit columns.
+
+    Endpoints are effectively AllowAny today (no DEFAULT_PERMISSION_CLASSES), so
+    request.user is often AnonymousUser — hence the guard rather than a bare
+    request.user.username.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated:
+        return user.username
+    return ""
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
@@ -356,6 +381,217 @@ class InvoiceViewSet(viewsets.ModelViewSet) :
 
 
     
+class HSNCodeViewSet(viewsets.ModelViewSet):
+    queryset = HSNCode.objects.all().order_by("code")
+    serializer_class = HSNCodeSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(code__icontains=search) | Q(description__icontains=search)
+            )
+        return queryset
+
+
+class PurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = (
+        PurchaseOrder.objects
+        .select_related("supplier", "warehouse")
+        .prefetch_related("line_items__product")
+        .order_by("-created_at")
+    )
+    serializer_class = PurchaseOrderSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        status_filter = self.request.query_params.get("status")
+        supplier = self.request.query_params.get("supplier")
+        open_only = self.request.query_params.get("open")
+
+        if search:
+            queryset = queryset.filter(
+                Q(po_number__icontains=search) | Q(supplier__name__icontains=search)
+            )
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+        # Receipts are raised against open orders only, so the form needs this.
+        if open_only == "true":
+            queryset = queryset.filter(status__in=PurchaseOrder.OPEN_STATUSES)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_username(self.request))
+
+    @action(detail=False, methods=["get"], url_path="next-number")
+    def next_number(self, request):
+        return Response({"next_number": peek_document_number("PO")})
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        order = purchase_service.submit_purchase_order(self.get_object())
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        order = purchase_service.cancel_purchase_order(self.get_object())
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"])
+    def close(self, request, pk=None):
+        order = purchase_service.close_purchase_order(self.get_object())
+        return Response(self.get_serializer(order).data)
+
+
+class GoodsReceiptViewSet(viewsets.ModelViewSet):
+    queryset = (
+        GoodsReceipt.objects
+        .select_related("supplier", "warehouse", "purchase_order")
+        .prefetch_related("lines__product")
+        .order_by("-received_date", "-id")
+    )
+    serializer_class = GoodsReceiptSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        status_filter = self.request.query_params.get("status")
+        supplier = self.request.query_params.get("supplier")
+
+        if search:
+            queryset = queryset.filter(
+                Q(grn_number__icontains=search)
+                | Q(supplier__name__icontains=search)
+                | Q(supplier_dc_number__icontains=search)
+            )
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_username(self.request))
+
+    @action(detail=False, methods=["get"], url_path="next-number")
+    def next_number(self, request):
+        return Response({"next_number": peek_document_number("GRN")})
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        """Post stock IN — one movement per line, through the stock service."""
+        grn = purchase_service.confirm_goods_receipt(
+            self.get_object(),
+            performed_by=_username(request),
+            allow_over_receipt=request.data.get("allow_over_receipt") is True,
+        )
+        return Response(self.get_serializer(grn).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Reverse with compensating movements. The ledger is append-only."""
+        grn = purchase_service.cancel_goods_receipt(
+            self.get_object(), performed_by=_username(request),
+        )
+        return Response(self.get_serializer(grn).data)
+
+
+class BillViewSet(viewsets.ModelViewSet):
+    queryset = (
+        Bill.objects
+        .select_related("supplier", "warehouse", "purchase_order")
+        .prefetch_related("lines__product", "allocations")
+        .order_by("-bill_date", "-id")
+    )
+    serializer_class = BillSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        status_filter = self.request.query_params.get("status")
+        supplier = self.request.query_params.get("supplier")
+        open_only = self.request.query_params.get("open")
+
+        if search:
+            queryset = queryset.filter(
+                Q(bill_number__icontains=search)
+                | Q(supplier_bill_number__icontains=search)
+                | Q(supplier__name__icontains=search)
+            )
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+        # Payment allocation only makes sense against bills that still owe.
+        if open_only == "true":
+            queryset = queryset.filter(status__in=Bill.OPEN_STATUSES)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_username(self.request))
+
+    @action(detail=False, methods=["get"], url_path="next-number")
+    def next_number(self, request):
+        return Response({"next_number": peek_document_number("BILL")})
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        bill = purchase_service.confirm_bill(self.get_object(), performed_by=_username(request))
+        return Response(self.get_serializer(bill).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        bill = purchase_service.cancel_bill(self.get_object(), performed_by=_username(request))
+        return Response(self.get_serializer(bill).data)
+
+    @action(detail=False, methods=["get"])
+    def outstanding(self, request):
+        """What we owe each supplier — the report this module exists to enable."""
+        supplier_id = request.query_params.get("supplier")
+        supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id else None
+        return Response(purchase_service.supplier_outstanding(supplier))
+
+
+class PaymentOutViewSet(viewsets.ModelViewSet):
+    queryset = (
+        PaymentOut.objects
+        .select_related("supplier")
+        .prefetch_related("allocations__bill")
+        .order_by("-paid_date", "-id")
+    )
+    serializer_class = PaymentOutSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("search")
+        supplier = self.request.query_params.get("supplier")
+
+        if search:
+            queryset = queryset.filter(
+                Q(payment_number__icontains=search)
+                | Q(reference__icontains=search)
+                | Q(supplier__name__icontains=search)
+            )
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_username(self.request))
+
+    @action(detail=False, methods=["get"], url_path="next-number")
+    def next_number(self, request):
+        return Response({"next_number": peek_document_number("PAYOUT")})
+
+
 class InvoiceItemViewSet(viewsets.ModelViewSet) :
     queryset = InvoiceItem.objects.all()#.order_by("-created_at")
     serializer_class=InvoiceItemSerializer

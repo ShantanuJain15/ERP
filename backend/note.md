@@ -35,8 +35,11 @@ edit in the Invoice (not able to edit)
 
 # supplier
 see the supplier and product relatior, product get api
-
+Also from product remove the supplier, or make another table which store product and supplier   
 
 # HTML TO PDF
 write there are two different sources but I want it to be same.
+
+# Have to Apply Procure to pay doc
+Purchase order and Bill for inventory
 

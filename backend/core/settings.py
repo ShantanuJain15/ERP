@@ -189,6 +189,11 @@ COMPANY_EMAIL   = "shantanujain1507@gmail.com"
 COMPANY_PHONE   = "+91 98765 43210"
 COMPANY_GSTIN   = ""
 
+# Our own GST state code — the first two digits of COMPANY_GSTIN. Compared
+# against the supplier's state to decide CGST+SGST (intra-state) vs IGST
+# (inter-state) on every purchase bill. "09" is Uttar Pradesh.
+COMPANY_STATE_CODE = "09"
+
 # Invoice payment terms, in days. Mirrors PAYMENT_TERM_DAYS in
 # frontend/src/utils/invoice.js — both derive the due date from the same rule.
 PAYMENT_TERM_DAYS = 30

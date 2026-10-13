@@ -72,3 +72,47 @@ export const getInvoiceItems    = (params) => api.get('/inventory/invoicesitem/'
 export const createInvoiceItem  = (data)   => api.post('/inventory/invoicesitem/', data)
 export const updateInvoiceItem  = (id, d)  => api.put(`/inventory/invoicesitem/${id}/`, d)
 export const deleteInvoiceItem  = (id)     => api.delete(`/inventory/invoicesitem/${id}/`)
+
+// HSN Codes — statutory classification; supplies the default GST rate per product
+export const getHsnCodes   = (params) => api.get('/inventory/hsn-codes/', { params })
+export const createHsnCode = (data)   => api.post('/inventory/hsn-codes/', data)
+
+// Purchase Orders
+export const getPurchaseOrders   = (params) => api.get('/inventory/purchase-orders/', { params })
+export const getPurchaseOrder    = (id)     => api.get(`/inventory/purchase-orders/${id}/`)
+export const createPurchaseOrder = (data)   => api.post('/inventory/purchase-orders/', data)
+export const updatePurchaseOrder = (id, d)  => api.put(`/inventory/purchase-orders/${id}/`, d)
+export const deletePurchaseOrder = (id)     => api.delete(`/inventory/purchase-orders/${id}/`)
+export const getNextPoNumber     = ()       => api.get('/inventory/purchase-orders/next-number/')
+export const submitPurchaseOrder = (id)     => api.post(`/inventory/purchase-orders/${id}/submit/`)
+export const cancelPurchaseOrder = (id)     => api.post(`/inventory/purchase-orders/${id}/cancel/`)
+export const closePurchaseOrder  = (id)     => api.post(`/inventory/purchase-orders/${id}/close/`)
+
+// Purchase Receives (Goods Receipt / GRN) — the document that moves stock IN
+export const getPurchaseReceives   = (params) => api.get('/inventory/purchase-receives/', { params })
+export const getPurchaseReceive    = (id)     => api.get(`/inventory/purchase-receives/${id}/`)
+export const createPurchaseReceive = (data)   => api.post('/inventory/purchase-receives/', data)
+export const updatePurchaseReceive = (id, d)  => api.put(`/inventory/purchase-receives/${id}/`, d)
+export const deletePurchaseReceive = (id)     => api.delete(`/inventory/purchase-receives/${id}/`)
+export const getNextGrnNumber      = ()       => api.get('/inventory/purchase-receives/next-number/')
+export const confirmPurchaseReceive = (id)    => api.post(`/inventory/purchase-receives/${id}/confirm/`)
+export const cancelPurchaseReceive  = (id)    => api.post(`/inventory/purchase-receives/${id}/cancel/`)
+
+// Bills (supplier purchase invoices)
+export const getBills        = (params) => api.get('/inventory/bills/', { params })
+export const getBill         = (id)     => api.get(`/inventory/bills/${id}/`)
+export const createBill      = (data)   => api.post('/inventory/bills/', data)
+export const updateBill      = (id, d)  => api.put(`/inventory/bills/${id}/`, d)
+export const deleteBill      = (id)     => api.delete(`/inventory/bills/${id}/`)
+export const getNextBillNumber = ()     => api.get('/inventory/bills/next-number/')
+export const confirmBill     = (id)     => api.post(`/inventory/bills/${id}/confirm/`)
+export const cancelBill      = (id)     => api.post(`/inventory/bills/${id}/cancel/`)
+export const getSupplierOutstanding = (params) => api.get('/inventory/bills/outstanding/', { params })
+
+// Payments Out
+export const getPaymentsOut   = (params) => api.get('/inventory/payments-out/', { params })
+export const getPaymentOut    = (id)     => api.get(`/inventory/payments-out/${id}/`)
+export const createPaymentOut = (data)   => api.post('/inventory/payments-out/', data)
+export const updatePaymentOut = (id, d)  => api.put(`/inventory/payments-out/${id}/`, d)
+export const deletePaymentOut = (id)     => api.delete(`/inventory/payments-out/${id}/`)
+export const getNextPayoutNumber = ()    => api.get('/inventory/payments-out/next-number/')

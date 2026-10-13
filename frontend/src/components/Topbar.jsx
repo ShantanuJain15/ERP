@@ -9,6 +9,12 @@ const pageTitles = {
   '/suppliers':       { title: 'Suppliers',        sub: 'Manage supplier information' },
   '/stock-movements': { title: 'Stock Movements',  sub: 'Track inventory in/out' },
   '/reports':         { title: 'Reports',          sub: 'Analytics and insights' },
+  '/customers':       { title: 'Customers',        sub: 'Manage customer records' },
+  '/invoices':        { title: 'Invoices',         sub: 'Bill your customers' },
+  '/purchase-orders': { title: 'Purchase Orders',  sub: 'What you have ordered from suppliers' },
+  '/purchase-receives': { title: 'Purchase Receives', sub: 'Goods arriving into your warehouses' },
+  '/bills':           { title: 'Bills',            sub: 'What your suppliers have charged you' },
+  '/payments-out':    { title: 'Payments Out',     sub: 'What you have paid your suppliers' },
 }
 
 export default function Topbar() {

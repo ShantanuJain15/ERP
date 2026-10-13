@@ -1,29 +1,40 @@
-import { useState, useEffect } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   MdDashboard, MdInventory, MdCategory, MdLocalShipping,
   MdSwapVert, MdBarChart, MdLogout, MdSettings, MdWarehouse,
-  MdPeople, MdReceipt, MdPointOfSale, MdExpandMore, MdExpandLess
+  MdPeople, MdReceipt, MdPointOfSale, MdShoppingCart,
+  MdAssignment, MdCallReceived, MdReceiptLong, MdPayments,
 } from 'react-icons/md'
+import NavGroup from './NavGroup'
 
 const navItems = [
   { to: '/dashboard',       icon: <MdDashboard />,      label: 'Dashboard' },
   { to: '/products',        icon: <MdInventory />,       label: 'Products' },
   { to: '/categories',      icon: <MdCategory />,        label: 'Categories' },
-  { to: '/suppliers',       icon: <MdLocalShipping />,   label: 'Suppliers' },
   { to: '/warehouses',      icon: <MdWarehouse />,       label: 'Warehouses' },
   { to: '/warehouse-stock', icon: <MdWarehouse />,       label: 'Warehouse Stock' },
   { to: '/stock-movements', icon: <MdSwapVert />,        label: 'Stock Movements' },
   { to: '/reports',         icon: <MdBarChart />,        label: 'Reports' },
 ]
 
+const salesItems = [
+  { to: '/customers', icon: <MdPeople />,  label: 'Customers' },
+  { to: '/invoices',  icon: <MdReceipt />, label: 'Invoices' },
+]
+
+// Order follows the procure-to-pay lifecycle: who we buy from, what we ordered,
+// what arrived, what we were billed, what we paid.
+const purchaseItems = [
+  { to: '/suppliers',         icon: <MdLocalShipping />, label: 'Suppliers' },
+  { to: '/purchase-orders',   icon: <MdAssignment />,    label: 'Purchase Orders' },
+  { to: '/purchase-receives', icon: <MdCallReceived />,  label: 'Purchase Receives' },
+  { to: '/bills',             icon: <MdReceiptLong />,   label: 'Bills' },
+  { to: '/payments-out',      icon: <MdPayments />,      label: 'Payments Out' },
+]
+
 export default function Sidebar() {
   const navigate = useNavigate()
-  const location = useLocation()
-
-  const [salesOpen, setSalesOpen] = useState(
-    location.pathname.startsWith('/customers') || location.pathname.startsWith('/invoices')
-  )
 
   const handleLogout = () => {
     localStorage.removeItem('access_token')
@@ -54,31 +65,8 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        {/* <div className="sidebar-section-label" style={{ marginTop: 12 }}>Modules</div> */}
-        <button
-          className="nav-item"
-          style={{ width: '100%', background: 'none', border: 'none', justifyContent: 'flex-start' }}
-          onClick={() => setSalesOpen(!salesOpen)}
-        >
-          <span className="nav-icon"><MdPointOfSale /></span>
-          Sales
-          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-            {salesOpen ? <MdExpandLess /> : <MdExpandMore />}
-          </span>
-        </button>
-        
-        {salesOpen && (
-          <div style={{ marginLeft: 16, marginTop: 2, paddingLeft: 8, borderLeft: '1px solid var(--border)' }}>
-            <NavLink to="/customers" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <span className="nav-icon"><MdPeople /></span>
-              Customers
-            </NavLink>
-            <NavLink to="/invoices" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <span className="nav-icon"><MdReceipt /></span>
-              Invoices
-            </NavLink>
-          </div>
-        )}
+        <NavGroup label="Sales" icon={<MdPointOfSale />} items={salesItems} />
+        <NavGroup label="Purchase" icon={<MdShoppingCart />} items={purchaseItems} />
 
         <div className="sidebar-section-label" style={{ marginTop: 12 }}>General</div>
         <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>

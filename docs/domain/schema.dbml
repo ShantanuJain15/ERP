@@ -28,6 +28,9 @@ Table inventory_supplier {
   email varchar(254)
   phone varchar(30)
   address text
+  gstin varchar(15) [note: 'IMPLEMENTED']
+  state_code varchar(2) [note: 'IMPLEMENTED — decides CGST+SGST vs IGST']
+  payment_terms_days int [default: 30, note: 'IMPLEMENTED — sets bill.due_date']
   is_active boolean [default: true]
   created_at timestamp
 
@@ -78,12 +81,13 @@ Table inventory_product {
   quantity int [default: 0, note: 'Denormalized aggregate of warehouse_stock, kept by the stock service']
   reorder_level int [default: 0]
   supplier_id int
+  hsn_code_id bigint [note: 'IMPLEMENTED — nullable FK; supplies the default GST rate to bill lines']
   is_active boolean [default: true]
   last_modified_by_username varchar(150)
   created_at timestamp
   updated_at timestamp
 
-  Note: 'DESIGN GAP: no hsn_code, no category_id, no uom, no cost price.'
+  Note: 'DESIGN GAP: no category_id, no uom. Cost price now lives per goods receipt, not per product.'
 }
 
 // IMPLEMENTED — inventory/models.py :: ACProduct
@@ -108,7 +112,8 @@ Table category {
   created_at timestamp
 }
 
-// DESIGN — statutory product classification, required on every GST invoice.
+// IMPLEMENTED — inventory/models.py :: HSNCode
+// Statutory product classification, required on every GST document.
 Table hsn_code {
   id bigint [pk, increment]
   code varchar(10) [unique, not null]
@@ -145,13 +150,16 @@ Table inventory_stockmovement {
   movement_type varchar(20) [not null, note: 'IN | OUT | ADJ_UP | ADJ_DOWN | RETURN | DAMAGE']
   quantity int [not null]
   quantity_change int [not null, note: 'Positive = in, negative = out']
-  reference_type varchar(20) [default: 'MANUAL', note: 'PO | SO | INVOICE | MANUAL']
+  reference_type varchar(20) [default: 'MANUAL', note: 'PO | GRN | BILL | SO | INVOICE | MANUAL']
   reference_number varchar(100)
   notes text
   performed_by varchar(150)
   created_at timestamp
 
-  Note: 'DESIGN GAP: no valuation. Add unit_cost + value_change to enable stock valuation and margin.'
+  unit_cost decimal(14,2) [note: 'IMPLEMENTED — GST-exclusive cost per unit; nullable for history']
+  value_change decimal(16,2) [note: 'IMPLEMENTED — unit_cost x quantity_change, signed']
+
+  Note: 'Valuation columns are now populated by the purchase services. The ledger is the single source for stock value.'
 }
 
 // DESIGN — one row per physical AC unit. Warranty attaches here, not to the product.
@@ -349,13 +357,15 @@ Table credit_note_line {
   line_total decimal(14,2)
 }
 
-// DESIGN — fixes the numbering race.
-// InvoiceSerializer._next_invoice_number() currently finds the max via a
-// __regex scan, so two concurrent invoices can read the same maximum and
-// take the same number. This table is incremented under a row lock instead.
+// IMPLEMENTED — inventory/models.py :: NumberSeries
+// Fixes the numbering race. InvoiceSerializer._next_invoice_number() still
+// finds the max via a __regex scan, so two concurrent invoices can take the
+// same number; the purchase documents use this table instead, incremented
+// under a row lock. Migrating Invoice onto it is outstanding.
+// NOTE: select_for_update() is a silent no-op on SQLite.
 Table number_series {
   id bigint [pk, increment]
-  document_type varchar(30) [unique, not null, note: 'INVOICE | SO | PO | DN | PAYMENT | CN | GRN']
+  document_type varchar(30) [unique, not null, note: 'PO | GRN | BILL | PAYOUT implemented; INVOICE | SO | DN | CN pending']
   prefix varchar(20) [not null]
   next_number int [not null, default: 1]
   padding int [not null, default: 5]
@@ -396,27 +406,105 @@ Table inventory_polineitem {
   }
 }
 
-// DESIGN — the document that actually moves stock in.
+// IMPLEMENTED — inventory/models.py :: GoodsReceipt
+// The document that actually moves stock in.
 Table goods_receipt {
-  id bigint [pk, increment]
+  id int [pk, increment]
   grn_number varchar(50) [unique, not null]
-  purchase_order_id int
+  purchase_order_id int [note: 'nullable — emergency and cash buys arrive without an order']
   supplier_id int [not null]
   warehouse_id int [not null]
   status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT | RECEIVED | CANCELLED']
   received_date date [not null]
   supplier_dc_number varchar(100) [note: "supplier's delivery challan"]
   notes text
+  created_by varchar(150)
+  created_at timestamp
+  updated_at timestamp
+}
+
+// IMPLEMENTED — inventory/models.py :: GoodsReceiptLine
+Table goods_receipt_line {
+  id int [pk, increment]
+  goods_receipt_id int [not null]
+  po_line_item_id int
+  product_id int [not null]
+  quantity int [not null, note: 'integer: whole units only, decided at implementation']
+  unit_cost decimal(14,2) [not null, note: 'GST-exclusive. The piece that makes valuation and margin computable.']
+}
+
+// IMPLEMENTED — inventory/models.py :: Bill
+// The supplier's demand for payment. Posts stock itself only when it IS the
+// receipt — see 02-procure-to-pay.md, "Three paths into stock".
+Table bill {
+  id int [pk, increment]
+  bill_number varchar(50) [unique, not null, note: 'ours']
+  supplier_bill_number varchar(100) [note: 'theirs; unique per supplier when non-empty']
+  supplier_bill_date date
+  supplier_id int [not null]
+  purchase_order_id int
+  warehouse_id int [note: 'required when updates_stock — its absence on invoice is a known bug']
+  updates_stock boolean [default: false, note: 'true when this bill is itself the receipt']
+  status varchar(20) [default: 'DRAFT', note: 'DRAFT | RECEIVED | PARTIALLY_PAID | PAID | CANCELLED']
+  bill_date date
+  due_date date [note: 'bill_date + supplier.payment_terms_days']
+  place_of_supply varchar(2)
+  subtotal decimal(14,2) [default: 0]
+  discount_amount decimal(14,2) [default: 0]
+  tax_total decimal(14,2) [default: 0]
+  total_amount decimal(14,2) [default: 0]
+  notes text
+  created_by varchar(150)
+  created_at timestamp
+  updated_at timestamp
+
+  Note: 'paid_amount is a DERIVED property over payment_out_allocation, never a stored column.'
+}
+
+// IMPLEMENTED — inventory/models.py :: BillLine
+Table bill_line {
+  id int [pk, increment]
+  bill_id int [not null]
+  goods_receipt_line_id int [note: 'null on the direct-bill path; what makes "billed <= received" checkable']
+  product_id int [not null]
+  quantity int [not null]
+  unit_price decimal(14,2) [not null, note: 'GST-exclusive']
+  hsn_code varchar(10) [note: 'snapshotted']
+  gst_rate decimal(5,2) [note: 'snapshotted']
+  taxable_amount decimal(14,2) [default: 0]
+  cgst_amount decimal(14,2) [default: 0]
+  sgst_amount decimal(14,2) [default: 0]
+  igst_amount decimal(14,2) [default: 0]
+  line_total decimal(14,2) [default: 0]
+}
+
+// IMPLEMENTED — inventory/models.py :: PaymentOut
+Table payment_out {
+  id int [pk, increment]
+  payment_number varchar(50) [unique, not null]
+  supplier_id int [not null]
+  amount decimal(14,2) [not null]
+  method varchar(20) [note: 'CASH | UPI | NEFT | CHEQUE | CARD']
+  status varchar(20) [default: 'PAID', note: 'PENDING | PAID | FAILED']
+  paid_date date
+  reference varchar(150) [note: 'UTR / cheque no / txn id']
+  notes text
+  created_by varchar(150)
   created_at timestamp
 }
 
-Table goods_receipt_line {
-  id bigint [pk, increment]
-  goods_receipt_id bigint [not null]
-  po_line_item_id int
-  product_id int [not null]
-  quantity decimal(12,3) [not null]
-  unit_cost decimal(14,2) [not null, note: 'the missing piece for stock valuation and margin']
+// IMPLEMENTED — inventory/models.py :: PaymentOutAllocation
+// One payment settles several bills; one bill takes several payments.
+Table payment_out_allocation {
+  id int [pk, increment]
+  payment_id int [not null]
+  bill_id int [not null]
+  amount decimal(14,2) [not null]
+  created_at timestamp
+
+  Indexes {
+    (payment_id, bill_id) [unique]
+  }
 }
 
 
@@ -426,6 +514,7 @@ Table goods_receipt_line {
 
 // Master data
 Ref: inventory_product.supplier_id > inventory_supplier.id
+Ref: inventory_product.hsn_code_id > hsn_code.id
 Ref: inventory_acproduct.product_id - inventory_product.id
 Ref: category.parent_id > category.id
 
@@ -483,6 +572,17 @@ Ref: goods_receipt_line.goods_receipt_id > goods_receipt.id
 Ref: goods_receipt_line.po_line_item_id > inventory_polineitem.id
 Ref: goods_receipt_line.product_id > inventory_product.id
 
+Ref: bill.supplier_id > inventory_supplier.id
+Ref: bill.purchase_order_id > inventory_purchaseorder.id
+Ref: bill.warehouse_id > inventory_warehouse.id
+Ref: bill_line.bill_id > bill.id
+Ref: bill_line.goods_receipt_line_id > goods_receipt_line.id
+Ref: bill_line.product_id > inventory_product.id
+
+Ref: payment_out.supplier_id > inventory_supplier.id
+Ref: payment_out_allocation.payment_id > payment_out.id
+Ref: payment_out_allocation.bill_id > bill.id
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 TableGroup "Master data" {
@@ -519,6 +619,10 @@ TableGroup "Procure to pay" {
   inventory_polineitem
   goods_receipt
   goods_receipt_line
+  bill
+  bill_line
+  payment_out
+  payment_out_allocation
 }
 
 TableGroup "Cross-cutting" {

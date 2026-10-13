@@ -5,7 +5,12 @@ From deciding we need stock to paying the supplier for it.
 The mirror of [order-to-cash](03-order-to-cash.md), and most decisions there apply here reversed.
 Read that one first.
 
-**Status:** design. `PurchaseOrder` and `POLineItem` exist; everything else is missing.
+**Status:** implemented. `PurchaseOrder`, `POLineItem`, `GoodsReceipt`, `GoodsReceiptLine`, `Bill`,
+`BillLine`, `PaymentOut` and `PaymentOutAllocation` are all built, with a full API and UI. Purchase
+Return / Debit Note is still design-only.
+
+Posting logic lives in `backend/inventory/services/purchase.py`; the invariants below name their
+enforcement points and are covered by tests in `backend/inventory/tests.py`.
 
 ---
 
@@ -26,9 +31,31 @@ you order 10, receive 7 now and 3 next month, and get billed for 7 on one invoic
 |---|---|---|---|
 | **Purchase Order** | Our commitment to buy | none | none |
 | **Goods Receipt (GRN)** | Goods physically arriving | **moves stock in** | none |
-| **Bill / Purchase Invoice** | Supplier's demand for payment | none | creates payable |
+| **Bill / Purchase Invoice** | Supplier's demand for payment | moves stock in *only when it is itself the receipt* | creates payable |
 | **Payment Out** | Money we paid | none | reduces payable |
 | **Purchase Return** | Goods sent back | moves stock out | reduces payable (debit note) |
+
+### Three paths into stock
+
+Not every purchase runs the full length. Forcing a cash buy of one AC through an order and a receipt
+is how you get staff working around the system.
+
+| Path | Documents | What posts stock |
+|---|---|---|
+| Planned purchase | PO → GRN → Bill | the GRN |
+| Emergency buy | GRN → Bill | the GRN (`purchase_order_id` is null) |
+| Cash / counter buy | Bill only | **the Bill** |
+
+`Bill.updates_stock` picks which — the mirror of `Invoice.updates_stock` in
+[order-to-cash](03-order-to-cash.md). Without it stock is either double-counted or never moved,
+depending on which document you trust. `Bill.warehouse` is required whenever it is set: the absence of
+that FK on the sales-side `Invoice` is exactly why that code reaches around the stock service.
+
+Valuation doesn't care which document posted, because **`StockMovement.unit_cost` is the single
+source** — the ledger carries value, so valuation is a sum over one table rather than a union across
+`goods_receipt_line` and `bill_line`. On the GRN path the cost is `goods_receipt_line.unit_cost`; on
+the direct-bill path it is `bill_line.unit_price`. Both are GST-exclusive: input GST is reclaimable
+credit, not part of what the item cost.
 
 ### The problem this fixes
 
@@ -95,6 +122,10 @@ The ledger is append-only.
 | 6 | Billed quantity never exceeds received quantity | service guard |
 | 7 | `sum(payments) <= bill.total` | DB constraint + service |
 | 8 | A PO cannot be cancelled once any goods are received | service guard |
+| 9 | Intra-state ⇒ CGST+SGST (equal halves); inter-state ⇒ IGST; never both | `services/tax.py` |
+| 10 | A stock-posting bill has no GRN-linked lines (no double count) | serializer + service guard |
+| 11 | `updates_stock` ⇒ `warehouse` is not null | `CheckConstraint` + serializer |
+| 12 | Cancelling a posted bill writes compensating movements, never deletes | service |
 
 ---
 
@@ -109,6 +140,21 @@ inventing a second pattern.
 finally makes stock valuation, COGS, and margin computable.
 
 ---
+
+## Decisions taken at implementation
+
+Answers to the questions below, as built:
+
+| Question | Answer |
+|---|---|
+| Cost per product or per receipt? | **Per receipt** — `goods_receipt_line.unit_cost`, carried onto the ledger. |
+| Partial deliveries? | **Yes.** `quantity_received` is derived from receipt lines, never written directly. |
+| Receive without a PO? | **Yes** — `goods_receipt.purchase_order_id` is nullable, and a Bill can post stock itself. |
+| Payment terms and ageing? | **Yes** — `Supplier.payment_terms_days` sets `Bill.due_date`; `GET /bills/outstanding/`. |
+| GST on bills? | **Per line**, snapshotted (`hsn_code`, `gst_rate`, CGST/SGST/IGST). Prices are GST-exclusive. |
+| Fractional quantities? | **No** — whole units throughout, matching the integer stock service. |
+| Landed cost? | **Deferred.** |
+| Valuation method? | Still open — `unit_cost`/`value_change` are now on the ledger, so moving average is computable but not yet implemented. |
 
 ## Open questions
 

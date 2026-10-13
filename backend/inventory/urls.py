@@ -4,12 +4,17 @@ from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BillViewSet,
     BrandOfferDiscoveryView,
     CustomerViewSet,
+    GoodsReceiptViewSet,
+    HSNCodeViewSet,
     InvoiceItemViewSet,
     InvoiceViewSet,
     OfferDiscoveryView,
+    PaymentOutViewSet,
     ProductViewSet,
+    PurchaseOrderViewSet,
     StockMovementViewSet,
     SupplierViewSet,
     WarehouseViewSet,
@@ -27,6 +32,13 @@ router.register("invoicesitem", InvoiceItemViewSet, basename="invoiceitem")
 router.register("warehouses", WarehouseViewSet, basename="warehouse")
 router.register("warehouse-stock", WarehouseStockViewSet, basename="warehousestock")
 router.register("stock-movements", StockMovementViewSet, basename="stockmovement")
+
+# ── Procure to pay ───────────────────────────────────────────────────────────
+router.register("hsn-codes", HSNCodeViewSet, basename="hsncode")
+router.register("purchase-orders", PurchaseOrderViewSet, basename="purchaseorder")
+router.register("purchase-receives", GoodsReceiptViewSet, basename="goodsreceipt")
+router.register("bills", BillViewSet, basename="bill")
+router.register("payments-out", PaymentOutViewSet, basename="paymentout")
 # router.register("acs", ACViewSet, basename="ac")
 
 urlpatterns = [

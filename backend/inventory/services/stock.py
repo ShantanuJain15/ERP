@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
@@ -60,6 +62,7 @@ def record_stock_movement(
     reference_number="",
     notes="",
     performed_by="",
+    unit_cost=None,
 ):
     if not warehouse:
         raise ValidationError({"warehouse": "Warehouse is required."})
@@ -79,6 +82,15 @@ def record_stock_movement(
         raise ValidationError({"quantity": "Quantity must be greater than zero."})
 
     quantity_change = movement_quantity_change(movement_type, quantity)
+
+    # The ledger carries value alongside quantity, so stock valuation is a sum
+    # over this table rather than a reconstruction from receipt documents. It
+    # also means a Bill can post stock directly without valuation needing to
+    # care which document did it.
+    value_change = None
+    if unit_cost is not None:
+        unit_cost = Decimal(str(unit_cost))
+        value_change = unit_cost * quantity_change
 
     with transaction.atomic():
         product = Product.objects.select_for_update().get(pk=product.pk)
@@ -108,6 +120,8 @@ def record_stock_movement(
             quantity_change=quantity_change,
             reference_type=reference_type or "MANUAL",
             reference_number=reference_number or "",
+            unit_cost=unit_cost,
+            value_change=value_change,
             notes=notes or "",
             performed_by=performed_by or "",
         )
